@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+@theme {
+  --color-navy: #0A192F;
+  --color-petroleum: #1D4E89;
+  --color-beige: #FDFBF7;
+  --color-warmwhite: #FFFBFA;
+  --color-gold: #D4AF37;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  background-color: var(--color-beige);
+  color: var(--color-navy);
+}

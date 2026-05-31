@@ -1,0 +1,181 @@
+{
+  "entities": {
+    "Lead": {
+      "title": "Lead",
+      "description": "A potential customer",
+      "type": "object",
+      "properties": {
+        "nome": { "type": "string" },
+        "telefone": { "type": "string" },
+        "email": { "type": "string" },
+        "linkedin": { "type": "string" },
+        "instagram": { "type": "string" },
+        "origem": { "type": "string" },
+        "produtoInteresse": { "type": "string" },
+        "status": { "type": "string" },
+        "temperatura": { "type": "string" },
+        "responsavel": { "type": "string" },
+        "ultimaInteracao": { "type": "string" },
+        "proximoFollowUp": { "type": "string" },
+        "observacoes": { "type": "string" },
+        "tags": { "type": "array" }
+      },
+      "required": ["nome"]
+    },
+    "Aluno": {
+      "title": "Aluno",
+      "description": "A student",
+      "type": "object",
+      "properties": {
+        "nome": { "type": "string" },
+        "telefone": { "type": "string" },
+        "email": { "type": "string" },
+        "formacao": { "type": "string" },
+        "turma": { "type": "string" },
+        "statusAcesso": { "type": "string" },
+        "statusNutror": { "type": "string" },
+        "statusMRP": { "type": "string" },
+        "grupoWhatsApp": { "type": "boolean" },
+        "pendencias": { "type": "string" },
+        "certificadoILG": { "type": "boolean" },
+        "certificadoMEC": { "type": "boolean" },
+        "pagamento": { "type": "string" },
+        "observacoes": { "type": "string" }
+      },
+      "required": ["nome"]
+    },
+    "Turma": {
+      "title": "Turma",
+      "description": "A class cohort",
+      "type": "object",
+      "properties": {
+        "nome": { "type": "string" },
+        "formacao": { "type": "string" },
+        "dataInicio": { "type": "string" },
+        "dataEncerramento": { "type": "string" },
+        "status": { "type": "string" },
+        "links": { "type": "string" },
+        "grupoWhatsApp": { "type": "string" },
+        "responsavel": { "type": "string" },
+        "observacoes": { "type": "string" }
+      },
+      "required": ["nome"]
+    },
+    "Material": {
+      "title": "Material",
+      "description": "A learning or operational material",
+      "type": "object",
+      "properties": {
+        "nome": { "type": "string" },
+        "tipo": { "type": "string" },
+        "formacaoRelacionada": { "type": "string" },
+        "linkDrive": { "type": "string" },
+        "linkCanva": { "type": "string" },
+        "status": { "type": "string" },
+        "responsavel": { "type": "string" },
+        "prazo": { "type": "string" },
+        "observacoes": { "type": "string" }
+      },
+      "required": ["nome"]
+    },
+    "Pagamento": {
+      "title": "Pagamento",
+      "description": "Payment information",
+      "type": "object",
+      "properties": {
+        "aluno": { "type": "string" },
+        "formacao": { "type": "string" },
+        "valorCombinado": { "type": "string" },
+        "status": { "type": "string" },
+        "vencimento": { "type": "string" },
+        "comprovante": { "type": "string" },
+        "observacoes": { "type": "string" },
+        "responsavel": { "type": "string" }
+      },
+      "required": ["aluno"]
+    },
+    "Suporte": {
+      "title": "Suporte",
+      "description": "A support ticket",
+      "type": "object",
+      "properties": {
+        "aluno": { "type": "string" },
+        "formacao": { "type": "string" },
+        "categoria": { "type": "string" },
+        "descricao": { "type": "string" },
+        "status": { "type": "string" },
+        "responsavel": { "type": "string" },
+        "dataAbertura": { "type": "string" },
+        "dataResolucao": { "type": "string" },
+        "resposta": { "type": "string" }
+      },
+      "required": ["aluno"]
+    },
+    "Tarefa": {
+      "title": "Tarefa",
+      "description": "An internal task",
+      "type": "object",
+      "properties": {
+        "titulo": { "type": "string" },
+        "descricao": { "type": "string" },
+        "area": { "type": "string" },
+        "responsavel": { "type": "string" },
+        "prioridade": { "type": "string" },
+        "prazo": { "type": "string" },
+        "status": { "type": "string" },
+        "observacoes": { "type": "string" }
+      },
+      "required": ["titulo"]
+    },
+    "Perfil": {
+      "title": "Perfil",
+      "description": "Collaborator profile details",
+      "type": "object",
+      "properties": {
+        "nome": { "type": "string" },
+        "cargo": { "type": "string" },
+        "foto": { "type": "string" },
+        "perfil": { "type": "string" },
+        "linkedin": { "type": "string" },
+        "instagram": { "type": "string" },
+        "email": { "type": "string" },
+        "telefone": { "type": "string" }
+      },
+      "required": ["nome", "cargo"]
+    }
+  },
+  "firestore": {
+    "/perfis/{perfilId}": {
+      "schema": { "$ref": "#/entities/Perfil" },
+      "description": "Collection of all collaborator workspace profile data"
+    },
+    "/leads/{leadId}": {
+      "schema": { "$ref": "#/entities/Lead" },
+      "description": "Collection of all sales leads"
+    },
+    "/alunos/{alunoId}": {
+      "schema": { "$ref": "#/entities/Aluno" },
+      "description": "Collection of all students"
+    },
+    "/turmas/{turmaId}": {
+      "schema": { "$ref": "#/entities/Turma" },
+      "description": "Collection of all class cohorts"
+    },
+    "/materiais/{materialId}": {
+      "schema": { "$ref": "#/entities/Material" },
+      "description": "Collection of all materials"
+    },
+    "/pagamentos/{pagamentoId}": {
+      "schema": { "$ref": "#/entities/Pagamento" },
+      "description": "Collection of all payments"
+    },
+    "/suporte/{suporteId}": {
+      "schema": { "$ref": "#/entities/Suporte" },
+      "description": "Collection of all support tickets"
+    },
+    "/tarefas/{tarefaId}": {
+      "schema": { "$ref": "#/entities/Tarefa" },
+      "description": "Collection of all internal tasks"
+    }
+  }
+}

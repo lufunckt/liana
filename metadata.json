@@ -1,0 +1,11 @@
+{
+  "name": "Remix: Central Operacional ILG",
+  "description": "A professional SaaS platform centralizing leads, students, and operations for Instituto Liana Gomes through organized dashboards and visual databases.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
