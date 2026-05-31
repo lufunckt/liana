@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, MessageSquare, Plus, Check, MessageCircle, Send, Phone, Mail, User, Info, Tag, Layers, CheckSquare, Award, Printer, Trash2, Edit3, Sparkles } from 'lucide-react';
+import { 
+  X, Save, MessageSquare, Plus, Check, MessageCircle, Send, 
+  Phone, Mail, User, Info, Tag, Layers, CheckSquare, Award, 
+  Printer, Trash2, Edit3, Sparkles, Building, Calendar, DollarSign,
+  HelpCircle, CheckCircle, ShieldAlert, FileText, BadgeAlert
+} from 'lucide-react';
 import { useStore } from '../../store';
+import { cn } from '../../lib/utils';
 
 const COMPANY_PIX_CNPJ = '51.533.488/0001-09';
 
@@ -9,76 +15,88 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
 
   const { data, updateModuleData } = useStore();
   const pessoas = data.pessoas || [];
+  const tarefas = data.tarefas_suporte || [];
 
-  // Core contact states
+  // Active Sub-Tab
+  const [activeSubTab, setActiveSubTab] = useState<'resumo' | 'comercial' | 'onboarding' | 'suporte' | 'financeiro' | 'certificados' | 'historico'>('resumo');
+
+  // Contact Core
   const [nome, setNome] = useState(pessoa.nome || '');
   const [email, setEmail] = useState(pessoa.email || '');
   const [telefone, setTelefone] = useState(pessoa.telefone || '');
   const [tipoPessoa, setTipoPessoa] = useState(pessoa.tipoPessoa || 'lead');
-  
-  // Commercial journey states
+
+  // Commercial Tab States
+  const [origem, setOrigem] = useState(pessoa.origem || 'Tráfego Pago');
+  const [status, setStatus] = useState(pessoa.status || 'Novo lead');
   const [produtoInteresse, setProdutoInteresse] = useState(pessoa.produtoInteresse || '');
-  const [status, setStatus] = useState(pessoa.status || 'novo');
-  const [temperatura, setTemperatura] = useState(pessoa.temperatura || 'frio');
+  const [objecaoPrincipal, setObjecaoPrincipal] = useState(pessoa.objecaoPrincipal || 'Nenhuma');
+  const [ultimaInteracao, setUltimaInteracao] = useState(pessoa.ultimaInteracao || '');
   const [proximoContato, setProximoContato] = useState(pessoa.proximoContato || '');
   const [responsavel, setResponsavel] = useState(pessoa.responsavel || 'Ana');
+  const [temperatura, setTemperatura] = useState(pessoa.temperatura || 'frio');
+  const [tags, setTags] = useState<string[]>(pessoa.tags || ['Interesse']);
+  const [novaTag, setNovaTag] = useState('');
   const [observacoes, setObservacoes] = useState(pessoa.observacoes || '');
 
-  // Student journey states
-  const [produtoComprado, setProdutoComprado] = useState(pessoa.produtoComprado || '');
+  // Student Onboarding Tab States
+  const [formacao, setFormacao] = useState(pessoa.produtoComprado || pessoa.formacao || '');
   const [turma, setTurma] = useState(pessoa.turma || '');
   const [entrouGrupo, setEntrouGrupo] = useState(pessoa.entrouGrupo || false);
-  const [respondeuInicial, setResondeuInicial] = useState(pessoa.respondeuInicial || false);
+  const [respondeuInicial, setRespondeuInicial] = useState(pessoa.respondeuInicial || false);
+  const [bonusEnviado, setBonusEnviado] = useState(pessoa.bonusEnviado || false);
   const [acessoNutror, setAcessoNutror] = useState(pessoa.acessoNutror || false);
   const [acessoMRP, setAcessoMRP] = useState(pessoa.acessoMRP || false);
+  const [statusOnboarding, setStatusOnboarding] = useState(pessoa.statusOnboarding || 'Acesso OK');
+  const [onboardingPendencias, setOnboardingPendencias] = useState(pessoa.onboardingPendencias || '');
 
-  // Interaction logs (with auto-scrolling list)
+  // Support Tab States - Dynamic list + Add quick ticket
+  const [novoTicketTitle, setNovoTicketTitle] = useState('');
+  const [novoTicketPrio, setNovoTicketPrio] = useState('alta');
+
+  // Finance Tab States
+  const [valorCombinado, setValorCombinado] = useState(pessoa.valorCombinado || '0');
+  const [formaPagamento, setFormaPagamento] = useState(pessoa.formaPagamento || 'PIX');
+  const [statusFinanceiro, setStatusFinanceiro] = useState(pessoa.statusFinanceiro || 'Pendente');
+  const [parcelas, setParcelas] = useState(pessoa.parcelas || '1x');
+  const [vencimentos, setVencimentos] = useState(pessoa.vencimentos || '');
+  const [comprovantes, setComprovantes] = useState(pessoa.comprovantes || '');
+  const [observacoesFinanceiras, setObservacoesFinanceiras] = useState(pessoa.observacoesFinanceiras || '');
+
+  // Timeline logs and Team Discussion
   const [interacoes, setInteracoes] = useState<any[]>(pessoa.interacoes || [
     { text: `Registro inicializado como ${pessoa.tipoPessoa || 'lead'}`, date: 'Sistema', type: 'system' }
   ]);
-  const [novaInteracao, setNovaInteracao] = useState('');
+  const [discussaoInterna, setDiscussaoInterna] = useState<any[]>(pessoa.discussaoInterna || [
+    { id: 'disc_init', autorNome: 'Liana Gomes', autorId: 'liana', avatar: '👑', texto: 'Iniciamos o alinhamento de processos desse contato. Qualquer atualização de suporte ou cronograma comercial deve ser postada nesta área!', dataHora: '2026-05-24 10:00' }
+  ]);
+  const [novaDiscMsg, setNovaDiscMsg] = useState('');
+  const [discAutor, setDiscAutor] = useState<'liana' | 'nuria' | 'ana' | 'luiza'>('luiza');
 
   // WhatsApp helper states
   const [selectedTemplate, setSelectedTemplate] = useState('');
   const [messageText, setMessageText] = useState('');
   const [customPhone, setCustomPhone] = useState(pessoa.telefone || '');
 
-  // Internal discussion states
-  const [discussaoInterna, setDiscussaoInterna] = useState<any[]>(pessoa.discussaoInterna || [
-    { id: 'disc_init', autorNome: 'Liana Gomes', autorId: 'liana', avatar: '👑', texto: 'Iniciamos o alinhamento de processos desse contato. Qualquer atualização de suporte ou cronograma comercial deve ser postada nesta área!', dataHora: '2026-05-24 10:00' }
-  ]);
-  const [novaDiscMsg, setNovaDiscMsg] = useState('');
-  const [discAutor, setDiscAutor] = useState<'liana' | 'nuria' | 'ana' | 'luiza'>('luiza');
-  const [editingDiscId, setEditingDiscId] = useState<string | null>(null);
-  const [editingDiscText, setEditingDiscText] = useState('');
-
-  const handleAddDiscMsg = () => {
-    if (!novaDiscMsg.trim()) return;
-    const authorMap = {
-      liana: { nome: 'Liana Gomes', avatar: '👑' },
-      nuria: { nome: 'Núria Onboarding', avatar: '🌸' },
-      ana: { nome: 'Ana Comercial', avatar: '💼' },
-      luiza: { nome: 'Luiza Gestão', avatar: '⚡' }
-    };
-    const sel = authorMap[discAutor || 'luiza'];
-    const newMsg = {
-      id: 'disc_' + Date.now(),
-      autorNome: sel.nome,
-      autorId: discAutor,
-      avatar: sel.avatar,
-      texto: novaDiscMsg.trim(),
-      dataHora: new Date().toISOString().replace('T', ' ').substring(0, 16)
-    };
-    setDiscussaoInterna(prev => [...prev, newMsg]);
-    setNovaDiscMsg('');
-  };
-
-  const handleDeleteDiscMsg = (msgId: string) => {
-    setDiscussaoInterna(prev => prev.filter(m => m.id !== msgId));
-  };
-
-  // Certificate log states
+  // Academic Certificates list state
   const [studentCertificates, setStudentCertificates] = useState<any[]>([]);
+
+  // Intercepting Status change for "Comprou" automation trigger
+  const handleStatusChangeAction = (newStatus: string) => {
+    setStatus(newStatus);
+    if (newStatus === 'Comprou' || newStatus === 'comprou') {
+      setTipoPessoa('aluna');
+      setFormacao(produtoInteresse || 'Formação Completa');
+      setStatusOnboarding('Aguardando boas-vindas');
+      
+      // Auto register timeline checklist trigger
+      const logText = `[Automação Vendas] Lead marcado como Comprou. Registrado produto comprado, iniciado checklist de Onboarding de Aluna e criado pendências de boas-vindas.`;
+      setInteracoes(prev => [
+        { text: logText, date: 'Agora', type: 'system' },
+        ...prev
+      ]);
+    }
+  };
 
   useEffect(() => {
     const loadStudentCerts = () => {
@@ -86,7 +104,6 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
       if (savedIssued) {
         try {
           const list = JSON.parse(savedIssued) as any[];
-          // Match by student's email or name
           const matched = list.filter(c => 
             (c.emailAluno && email && c.emailAluno.toLowerCase() === email.toLowerCase()) ||
             (c.nomeAluno && nome && c.nomeAluno.toLowerCase() === nome.toLowerCase())
@@ -95,17 +112,14 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
         } catch(e) {}
       }
     };
-
     loadStudentCerts();
-    
-    // Listen to local update events
     window.addEventListener('certificados_updated', loadStudentCerts);
     return () => {
       window.removeEventListener('certificados_updated', loadStudentCerts);
     };
   }, [email, nome]);
 
-  // Define premium predefined message templates
+  // Predefined message templates
   const templates = [
     {
       id: 'comercial_boas_vindas',
@@ -141,76 +155,180 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
       id: 'financeiro_lembrete',
       label: '💵 Financeiro: Lembrete de Parcela',
       category: 'Geral',
-      text: `Olá, ${nome}! Espero que esteja super bem. ✨\n\nPassando para lembrar que temos uma parcela da sua formação em *{produto}* programada para vencer nos próximos dias.\n\n💳 Para facilitar seu acerto via PIX, nossa chave CNPJ oficial é:\n🔑 CNPJ: *${COMPANY_PIX_CNPJ}*\n\nAssim que realizar a transferência, compartilhe o comprovante aqui para atualizarmos seu status financeiro. Gratidão!`
+      text: `Olá, {nome}! Espero que esteja super bem. ✨\n\nPassando para lembrar que temos uma parcela da sua formação em *{produto}* programada para vencer nos próximos dias.\n\n💳 Para facilitar seu acerto via PIX, nossa chave CNPJ oficial é:\n🔑 CNPJ: *${COMPANY_PIX_CNPJ}*\n\nAssim que realizar a transferência, compartilhe o comprovante aqui para atualizarmos seu status financeiro. Gratidão!`
     }
   ];
 
-  // Sync templates selection with variables
   const handleTemplateChange = (templateId: string) => {
     setSelectedTemplate(templateId);
     if (!templateId) {
       setMessageText('');
       return;
     }
-
     const tpl = templates.find(t => t.id === templateId);
     if (tpl) {
-      const activeProd = tipoPessoa === 'aluna' ? (produtoComprado || 'Formação Executiva') : (produtoInteresse || 'Formação Líder');
+      const activeProd = tipoPessoa === 'aluna' ? (formacao || 'Formação Executiva') : (produtoInteresse || 'Formação Líder');
       const activeResp = responsavel || 'Ana';
-      
       let processed = tpl.text
         .replace(/{nome}/g, nome)
         .replace(/{produto}/g, activeProd)
         .replace(/{responsavel}/g, activeResp);
-      
       setMessageText(processed);
     }
   };
 
-  // Launch WhatsApp with standard phone validation
   const handleSendWhatsApp = () => {
     const targetPhone = customPhone || telefone;
     if (!targetPhone) {
       alert('Por favor, informe um número de telefone com DDD válido.');
       return;
     }
-
     let cleanPhone = String(targetPhone).replace(/\D/g, '');
     if (cleanPhone.length > 0 && !cleanPhone.startsWith('55') && cleanPhone.length <= 11) {
       cleanPhone = '55' + cleanPhone;
     }
-
-    if (cleanPhone.length < 10) {
-      alert('O número de telefone informado parece incompleto.');
-      return;
-    }
-
     const encodedText = encodeURIComponent(messageText);
     const url = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodedText}`;
 
-    // Add interaction note locally
+    // Record timeline log
     const templateName = templates.find(t => t.id === selectedTemplate)?.label || 'Mensagem Manual';
-    const logText = `[WhatsApp] Enviado: "${templateName}" para o número ${targetPhone}`;
     setInteracoes(prev => [
-      { text: logText, date: 'Agora', type: 'whatsapp' },
+      { text: `[Conversa WhatsApp] Mensagem enviada: "${templateName}" para +${targetPhone}`, date: 'Agora', type: 'whatsapp' },
       ...prev
     ]);
-
-    // Open WhatsApp in safe separate window
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
-  // Add a manual custom timeline note
-  const handleAddInteraction = () => {
-    if (!novaInteracao.trim()) return;
-    setInteracoes(prev => [
-      { text: novaInteracao.trim(), date: 'Agora', type: 'manual' },
-      ...prev
-    ]);
-    setNovaInteracao('');
+  // Add Discussion internal notes
+  const handleAddDiscMsg = () => {
+    if (!novaDiscMsg.trim()) return;
+    const authorMap = {
+      liana: { nome: 'Liana Gomes', avatar: '👑' },
+      nuria: { nome: 'Núria Onboarding', avatar: '🌸' },
+      ana: { nome: 'Ana Comercial', avatar: '💼' },
+      luiza: { nome: 'Luiza Gestão', avatar: '⚡' }
+    };
+    const sel = authorMap[discAutor || 'luiza'];
+    const newMsg = {
+      id: 'disc_' + Date.now(),
+      autorNome: sel.nome,
+      autorId: discAutor,
+      avatar: sel.avatar,
+      texto: novaDiscMsg.trim(),
+      dataHora: new Date().toISOString().replace('T', ' ').substring(0, 16)
+    };
+    setDiscussaoInterna(prev => [...prev, newMsg]);
+    setNovaDiscMsg('');
   };
 
-  // Persist edits back to firestore database
+  // Quick Support Ticket Creation
+  const handleAddNewSupportTicket = async () => {
+    if (!novoTicketTitle.trim()) return;
+    try {
+      const ticketId = 'task_' + Date.now();
+      const newTicket = {
+        id: ticketId,
+        titulo: novoTicketTitle.trim(),
+        tipo: 'suporte',
+        status: 'Aberto',
+        prioridade: novoTicketPrio,
+        responsavel: 'Núria',
+        pessoaId: pessoa.id,
+        email: email,
+        pautaId: 'suporte',
+        categoria: 'Suporte Técnico',
+        prazo: '2026-06-05'
+      };
+      
+      const currentList = data.tarefas_suporte || [];
+      await updateModuleData('tarefas_suporte', [newTicket, ...currentList]);
+      
+      setInteracoes(prev => [
+        { text: `[Suporte Criado] Novo ticket aberto com o assunto: "${novoTicketTitle}" e prioridade ${novoTicketPrio}`, date: 'Agora', type: 'system' },
+        ...prev
+      ]);
+      setNovoTicketTitle('');
+      alert('Chamado de suporte registrado e vinculado a esta aluna no Firestore!');
+    } catch (err: any) {
+      alert('Erro ao criar ticket: ' + err.message);
+    }
+  };
+
+  // Tag list helpers
+  const handleAddTag = () => {
+    if (!novaTag.trim()) return;
+    if (!tags.includes(novaTag.trim())) {
+      setTags([...tags, novaTag.trim()]);
+    }
+    setNovaTag('');
+  };
+
+  const handleRemoveTag = (t: string) => {
+    setTags(tags.filter(tag => tag !== t));
+  };
+
+  // Print PDF helper (rebuilding previous print)
+  const handlePrintCert = (cert: any) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Por favor permita popups para imprimir.');
+      return;
+    }
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Certificado - ${cert.nomeAluno}</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Inter:wght@400;605&display=swap');
+            body { 
+              margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background: #e2e8f0; font-family: 'Inter', sans-serif;
+            }
+            .cert-card {
+              position: relative; width: 1050px; height: 700px; background-color: #0A192F; color: white; border: 12px solid #D4AF37; box-shadow: 0 10px 40px rgba(0,0,0,0.2); padding: 50px; box-sizing: border-box; display: flex; flex-direction: column; text-align: center; border-image: linear-gradient(to bottom right, #D4AF37, #9B7C1D, #D4AF37) 12; justify-content: space-between;
+            }
+            .header h1 { font-family: 'Cinzel', serif; font-size: 40px; margin: 0; color: #D4AF37; letter-spacing: 3px; }
+            .content { font-size: 22px; line-height: 1.8; margin: 40px auto; max-width: 820px; }
+            .sig-block { border-top: 2px solid #D4AF37; padding-top: 8px; width: 240px; font-size: 13px; color: #cbd5e1; }
+            .footer-info { display: flex; justify-content: space-between; align-items: flex-end; }
+            .print-btn { position: fixed; bottom: 20px; right: 20px; background: #0A192F; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+            @media print { .print-btn { display: none; } body { background: white; } }
+          </style>
+        </head>
+        <body>
+          <button class="print-btn" onclick="window.print()">Imprimir / PDF</button>
+          <div class="cert-card">
+            <div class="header">
+              <h1>CERTIFICADO ACADÊMICO</h1>
+              <p style="font-size:12px; letter-spacing: 2px; color:#cbd5e1;">INSTITUTO LIANA GOMES</p>
+            </div>
+            <div class="content">
+              Certificamos que o(a) aluno(a) <strong style="color:#D4AF37; font-size: 28px; display:block; margin:10px 0;">${cert.nomeAluno}</strong> concluiu com aproveitamento a formação <strong>${cert.nomeFormacao}</strong> com total de ${cert.cargaHoraria || '120h'} de treinamento prático e mentoria em ${cert.dataConclusao}.
+            </div>
+            <div class="footer-info">
+              <div class="sig-block">
+                <strong>Liana Gomes</strong><br>Fundadora do Instituto ILG
+              </div>
+              <div class="sig-block" style="border-top:2px solid #64748b;">
+                Autenticidade: ${cert.id.toUpperCase()}<br>Selo de Emissão ILG
+              </div>
+            </div>
+          </div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  // Re-emit Cert email simulation
+  const handleReemitCertMail = (cert: any) => {
+    alert(`E-mail com PDF re-enviado com sucesso para ${email}!`);
+    setInteracoes(prev => [
+      { text: `[Certificado] Re-enviado e-mail de confirmação para ${email}`, date: 'Agora', type: 'system' },
+      ...prev
+    ]);
+  };
+
+  // Save all states back to Cloud Firestore
   const handleSaveAll = async () => {
     try {
       const updatedModel: any = {
@@ -226,565 +344,555 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
         observacoes,
         interacoes,
         discussaoInterna,
-        
-        // If they purchased or is student
-        produtoComprado,
+        tags,
+
+        // Student checklist and fields
+        produtoComprado: formacao,
+        formacao,
         turma,
         entrouGrupo,
         respondeuInicial,
+        bonusEnviado,
         acessoNutror,
-        acessoMRP
+        acessoMRP,
+        statusOnboarding,
+        onboardingPendencias,
+
+        // Financial
+        valorCombinado,
+        formaPagamento,
+        statusFinanceiro,
+        parcelas,
+        vencimentos,
+        comprovantes,
+        observacoesFinanceiras
       };
 
-      // Query database copy to update
       const updatedList = pessoas.map((p: any) => p.id === pessoa.id ? updatedModel : p);
-
       await updateModuleData('pessoas', updatedList);
-      alert('Cadastro e linha do tempo salvos com sucesso!');
+      
+      alert('Cadastro operacional da Ficha Única salvo com sucesso no Firestore!');
       onClose();
-    } catch (e: any) {
-      alert('Erro ao salvar no Firestore: ' + e.message);
+    } catch (err: any) {
+      alert('Erro ao salvar no Firestore: ' + err.message);
     }
   };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-stretch md:items-center justify-end md:justify-center bg-slate-950/40 backdrop-blur-xs">
-      <div className="bg-white w-full md:w-11/12 max-w-5xl h-full md:h-[95vh] md:rounded-xl shadow-2xl flex flex-col animate-in slide-in-from-right md:slide-in-from-bottom-4 overflow-hidden">
+      <div className="bg-white w-full md:w-11/12 max-w-6xl h-full md:h-[95vh] md:rounded-2xl shadow-2xl flex flex-col animate-in slide-in-from-right md:slide-in-from-bottom-4 overflow-hidden text-left">
         
-        {/* Modal Top Bar */}
-        <div className="flex justify-between items-center p-5 border-b border-slate-150 shrink-0 bg-slate-50">
+        {/* TOP BAR INFORMATION PANEL */}
+        <div className="bg-[#0A192F] text-white p-5 border-b border-slate-800 shrink-0 flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <span className="p-2.5 bg-[#0A192F]/10 text-[#0A192F] rounded-lg">
+            <div className="w-10 h-10 bg-[#D4AF37]/10 text-[#D4AF37] rounded-xl flex items-center justify-center font-bold border border-[#D4AF37]/20">
               <User className="w-5 h-5" />
-            </span>
-            <div>
-              <div className="flex items-center gap-2">
+            </div>
+            
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
                 <input 
                   type="text" 
                   value={nome} 
                   onChange={(e) => setNome(e.target.value)} 
-                  className="text-xl font-bold text-slate-900 border-b border-transparent hover:border-slate-300 focus:border-[#1F4E89] focus:ring-0 px-1 py-0.5 outline-none bg-transparent"
-                  title="Clique para editar o nome"
-                  placeholder="Nome do contato"
+                  className="bg-transparent hover:bg-slate-800 transition text-lg font-black text-white focus:outline-none focus:bg-slate-800 rounded px-1.5 py-0.5 max-w-[280px]"
                 />
+                
                 <select 
                   value={tipoPessoa} 
                   onChange={(e) => setTipoPessoa(e.target.value)}
-                  className="px-2 py-0.5 text-xs font-bold uppercase rounded border border-slate-300 bg-white"
+                  className="px-2 py-0.5 text-[10px] font-black uppercase rounded bg-[#D4AF37]/15 text-[#D4AF37] border border-[#D4AF37]/30 outline-none"
                 >
-                  <option value="lead">Lead</option>
-                  <option value="aluna">Aluna</option>
-                  <option value="ex-aluna">Ex-aluna</option>
+                  <option className="bg-[#0A192F] text-white" value="lead">Lead / CRM</option>
+                  <option className="bg-[#0A192F] text-white" value="aluna">Aluna Ativa</option>
+                  <option className="bg-[#0A192F] text-white" value="ex-aluna">Ex-Aluna</option>
                 </select>
               </div>
-              <p className="text-slate-500 text-xs mt-1 flex items-center gap-4">
-                <span>E-mail: <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="text-slate-600 underline outline-none bg-transparent hover:bg-white px-1" /></span>
-                <span>Whats: <input type="text" value={customPhone} onChange={(e) => { setCustomPhone(e.target.value); setTelefone(e.target.value); }} className="text-slate-600 outline-none bg-transparent hover:bg-white px-1 w-28" /></span>
-              </p>
+
+              <div className="flex items-center gap-4 text-[10px] text-slate-350 mt-1 font-bold">
+                <span>E-mail: <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="bg-transparent outline-none max-w-[170px] underline" /></span>
+                <span>WhatsApp: <input type="text" value={customPhone} onChange={(e) => { setCustomPhone(e.target.value); setTelefone(e.target.value); }} className="bg-transparent outline-none w-[110px]" /></span>
+              </div>
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 bg-slate-100 p-2 rounded-full transition">
+
+          <button onClick={onClose} className="text-slate-400 hover:text-white bg-slate-850 p-2 rounded-full transition shrink-0">
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Modal Main Body Scroll container */}
-        <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 bg-slate-50/50">
+        {/* COMPONENT SUB-TAB NAV BAR */}
+        <div className="bg-slate-50 border-b border-slate-200 p-2 px-6 flex flex-wrap gap-2 shrink-0 select-none">
+          <button onClick={() => setActiveSubTab('resumo')} className={cn("px-3.5 py-1.5 rounded-lg text-xs font-bold transition", activeSubTab === 'resumo' ? 'bg-[#0A192F] text-white' : 'text-slate-505 hover:bg-slate-100')}>Resumo</button>
+          <button onClick={() => setActiveSubTab('comercial')} className={cn("px-3.5 py-1.5 rounded-lg text-xs font-bold transition", activeSubTab === 'comercial' ? 'bg-[#0A192F] text-white' : 'text-slate-505 hover:bg-slate-100')}>Comercial</button>
+          <button onClick={() => setActiveSubTab('onboarding')} className={cn("px-3.5 py-1.5 rounded-lg text-xs font-bold transition", activeSubTab === 'onboarding' ? 'bg-[#0A192F] text-white' : 'text-slate-505 hover:bg-slate-100')}>Aluna/Onboarding</button>
+          <button onClick={() => setActiveSubTab('suporte')} className={cn("px-3.5 py-1.5 rounded-lg text-xs font-bold transition", activeSubTab === 'suporte' ? 'bg-[#0A192F] text-white' : 'text-slate-505 hover:bg-slate-100')}>Suporte</button>
+          <button onClick={() => setActiveSubTab('financeiro')} className={cn("px-3.5 py-1.5 rounded-lg text-xs font-bold transition", activeSubTab === 'financeiro' ? 'bg-[#0A192F] text-white' : 'text-slate-505 hover:bg-slate-100')}>Financeiro</button>
+          <button onClick={() => setActiveSubTab('certificados')} className={cn("px-3.5 py-1.5 rounded-lg text-xs font-bold transition", activeSubTab === 'certificados' ? 'bg-[#0A192F] text-white' : 'text-slate-505 hover:bg-slate-100')}>Certificados</button>
+          <button onClick={() => setActiveSubTab('historico')} className={cn("px-3.5 py-1.5 rounded-lg text-xs font-bold transition", activeSubTab === 'historico' ? 'bg-[#0A192F] text-white' : 'text-slate-505 hover:bg-slate-100')}>Histórico Timeline</button>
+        </div>
+
+        {/* MODAL BODY (LEFT TABS - RIGHT COCKPIT) */}
+        <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 bg-stone-50/50">
           
-          {/* LEFT PANEL: CRM Properties Form fields */}
-          <div className="lg:col-span-7 space-y-6 bg-white p-5 rounded-xl border border-slate-200">
+          {/* LEFT CONTAINER (THE SECTOR SWITCHER) */}
+          <div className="lg:col-span-7 bg-white border border-slate-205 rounded-xl p-5 shadow-inner">
             
-            {/* Lead metrics & journey section */}
-            <section className="space-y-4">
-              <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
-                <Layers className="w-4 h-4 text-amber-600" />
-                <h3 className="text-sm font-bold uppercase text-slate-800 tracking-wider">Metadados da Jornada Comercial</h3>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-3.5">
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 block mb-1">Produto de Interesse</label>
-                  <input 
-                    type="text" 
-                    value={produtoInteresse}
-                    onChange={(e) => setProdutoInteresse(e.target.value)}
-                    placeholder="Ex: Mentoria Compliance"
-                    className="w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 outline-none focus:border-[#1F4E89]"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 block mb-1">SDR / Responsável</label>
-                  <select 
-                    value={responsavel}
-                    onChange={(e) => setResponsavel(e.target.value)}
-                    className="w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:border-[#1F4E89]"
-                  >
-                    <option value="Liana">Liana</option>
-                    <option value="Ana">Ana</option>
-                    <option value="Núria">Núria</option>
-                    <option value="Luiza">Luiza</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 block mb-1">Funil de Vendas</label>
-                  <select 
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value)}
-                    className="w-full text-xs border border-slate-300 bg-white rounded-lg px-2.5 py-1.5 outline-none focus:border-[#1F4E89]"
-                  >
-                    <option value="novo">Novo Lead</option>
-                    <option value="em qualificação">Em Qualificação</option>
-                    <option value="em negociação">Em Negociação</option>
-                    <option value="aguardando pagamento">Aguardando Pagamento</option>
-                    <option value="comprou">Comprou / Aluna</option>
-                    <option value="perdido">Perdido</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 block mb-1">Temperatura</label>
-                  <select 
-                    value={temperatura}
-                    onChange={(e) => setTemperatura(e.target.value)}
-                    className="w-full text-xs border border-slate-300 bg-white rounded-lg px-2.5 py-1.5 outline-none focus:border-[#1F4E89]"
-                  >
-                    <option value="frio">❄️ Frio</option>
-                    <option value="morno">🔥 Morno</option>
-                    <option value="quente">⚡ Quente</option>
-                  </select>
-                </div>
-
-                <div className="col-span-2">
-                  <label className="text-xs font-semibold text-slate-500 block mb-1">Próximo Contato agendado</label>
-                  <input 
-                    type="date" 
-                    value={proximoContato}
-                    onChange={(e) => setProximoContato(e.target.value)}
-                    className="w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:border-[#1F4E89]"
-                  />
-                </div>
-              </div>
-            </section>
-
-            {/* Student Onboarding details - Shows if Aluna / purchased */}
-            {(tipoPessoa === 'aluna' || status === 'comprou' || produtoComprado) && (
-              <section className="space-y-4 pt-2 border-t border-slate-100">
-                <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
-                  <CheckSquare className="w-4 h-4 text-emerald-600" />
-                  <h3 className="text-sm font-bold uppercase text-slate-800 tracking-wider">Controles & Checkpoints de Aluna</h3>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 mb-2">
-                  <div>
-                    <label className="text-xs font-semibold text-slate-500 block mb-1">Produto Comprado</label>
-                    <input 
-                      type="text" 
-                      value={produtoComprado}
-                      onChange={(e) => setProdutoComprado(e.target.value)}
-                      placeholder="Ex: Combo Compliance + Executivo"
-                      className="w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 outline-none focus:border-[#1F4E89]"
-                    />
+            {/* TABS 1: RESUMO */}
+            {activeSubTab === 'resumo' && (
+              <div className="space-y-4">
+                <h3 className="text-sm font-black text-[#0A192F] uppercase border-b pb-2 tracking-tight">Painel Consolidado de Cadastro</h3>
+                
+                <div className="grid grid-cols-2 gap-4 text-xs font-medium text-slate-700">
+                  <div className="p-2.5 bg-slate-50 border rounded-lg">
+                    <span className="text-slate-450 block uppercase text-[9px] font-extrabold leading-none">Tipo e Perfil</span>
+                    <strong className="text-slate-800 text-sm block mt-1 uppercase">{tipoPessoa}</strong>
                   </div>
-                  <div>
-                    <label className="text-xs font-semibold text-slate-500 block mb-1">Identificação da Turma</label>
-                    <input 
-                      type="text" 
-                      value={turma}
-                      onChange={(e) => setTurma(e.target.value)}
-                      placeholder="Ex: Turma 03"
-                      className="w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 outline-none focus:border-[#1F4E89]"
-                    />
+                  <div className="p-2.5 bg-slate-50 border rounded-lg">
+                    <span className="text-slate-450 block uppercase text-[9px] font-extrabold leading-none">Etapa do Funil</span>
+                    <strong className="text-slate-800 text-sm block mt-1 uppercase">{status}</strong>
+                  </div>
+                  <div className="p-2.5 bg-slate-50 border rounded-lg">
+                    <span className="text-slate-450 block uppercase text-[9px] font-extrabold leading-none">Temperatura Lead</span>
+                    <strong className="text-slate-800 text-sm block mt-1 uppercase">{temperatura === 'quente' ? '⚡ Quente' : temperatura === 'morno' ? '🔥 Morno' : '❄️ Frio'}</strong>
+                  </div>
+                  <div className="p-2.5 bg-slate-50 border rounded-lg">
+                    <span className="text-slate-450 block uppercase text-[9px] font-extrabold leading-none">Responsável Interno</span>
+                    <strong className="text-slate-800 text-sm block mt-1 uppercase">{responsavel}</strong>
                   </div>
                 </div>
 
-                <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wide block mb-1">Status Interno de Onboarding (Núria / CS):</span>
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="flex items-center gap-2 p-2.5 border border-slate-200 rounded-lg bg-slate-50 hover:bg-slate-100 cursor-pointer text-xs">
-                    <input 
-                      type="checkbox" 
-                      checked={entrouGrupo} 
-                      onChange={(e) => setEntrouGrupo(e.target.checked)} 
-                      className="rounded text-emerald-600 focus:ring-emerald-500" 
-                    />
-                    <span>Ingressou no Grupo Whats</span>
-                  </label>
-
-                  <label className="flex items-center gap-2 p-2.5 border border-slate-200 rounded-lg bg-slate-50 hover:bg-slate-100 cursor-pointer text-xs">
-                    <input 
-                      type="checkbox" 
-                      checked={respondeuInicial} 
-                      onChange={(e) => setResondeuInicial(e.target.checked)} 
-                      className="rounded text-emerald-600 focus:ring-emerald-500" 
-                    />
-                    <span>Respondeu Diag. Inicial</span>
-                  </label>
-
-                  <label className="flex items-center gap-2 p-2.5 border border-slate-200 rounded-lg bg-slate-50 hover:bg-slate-100 cursor-pointer text-xs">
-                    <input 
-                      type="checkbox" 
-                      checked={acessoNutror} 
-                      onChange={(e) => setAcessoNutror(e.target.checked)} 
-                      className="rounded text-emerald-600 focus:ring-emerald-500" 
-                    />
-                    <span>Acesso ao Nutror</span>
-                  </label>
-
-                  <label className="flex items-center gap-2 p-2.5 border border-slate-200 rounded-lg bg-slate-50 hover:bg-slate-100 cursor-pointer text-xs">
-                    <input 
-                      type="checkbox" 
-                      checked={acessoMRP} 
-                      onChange={(e) => setAcessoMRP(e.target.checked)} 
-                      className="rounded text-emerald-600 focus:ring-emerald-500" 
-                    />
-                    <span>Acesso à Planilha MRP</span>
-                  </label>
+                <div className="space-y-2 pt-2">
+                  <p className="text-xs font-bold text-slate-500">Mais Detalhes Rápidos:</p>
+                  <ul className="text-xs space-y-1 bg-stone-50 p-3 rounded-lg border text-slate-650">
+                    <li>🎯 <strong>Interesse:</strong> {produtoInteresse || 'Não especificado'}</li>
+                    <li>🎓 <strong>Formação:</strong> {formacao || 'Não especificada'}</li>
+                    <li>👥 <strong>Turma vinculada:</strong> {turma || 'Sem turma cadastrada'}</li>
+                    <li>💳 <strong>Status do onboarding:</strong> {statusOnboarding}</li>
+                  </ul>
                 </div>
-              </section>
+
+                {/* TAGS */}
+                <div className="space-y-2 pt-1">
+                  <label className="text-xs font-black text-slate-500 uppercase block">Tags Cadastrais</label>
+                  <div className="flex flex-wrap gap-1">
+                    {tags.map(t => (
+                      <span key={t} className="p-1 px-2.5 bg-[#0A192F]/5 border border-slate-200 text-slate-700 font-bold rounded-lg text-[10px] flex items-center gap-1">
+                        {t}
+                        <button type="button" onClick={() => handleRemoveTag(t)} className="text-red-500 hover:text-red-700 font-black">×</button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="Criar nova tag" 
+                      value={novaTag} 
+                      onChange={(e) => setNovaTag(e.target.value)}
+                      className="text-xs border text-slate-800 px-3 py-1.5 rounded-lg focus:outline-none" 
+                    />
+                    <button type="button" onClick={handleAddTag} className="p-1 px-3 bg-slate-200 text-slate-700 font-bold rounded-lg text-xs">Adicionar</button>
+                  </div>
+                </div>
+              </div>
             )}
 
-            {/* Academic Certificates Tab / Card */}
-            {(tipoPessoa === 'aluna' || status === 'comprou' || produtoComprado) && (
-              <section className="space-y-4 pt-4 border-t border-slate-100 select-none">
-                <div className="flex items-center gap-2 justify-between border-b border-slate-100 pb-2">
-                  <div className="flex items-center gap-2">
-                    <Award className="w-4.5 h-4.5 text-amber-500" />
-                    <h3 className="text-sm font-bold uppercase text-slate-800 tracking-wider">Certificados Emitidos</h3>
+            {/* TABS 2: COMERCIAL */}
+            {activeSubTab === 'comercial' && (
+              <div className="space-y-4">
+                <h3 className="text-sm font-black text-[#0A192F] uppercase border-b pb-2 tracking-tight">Metadados da Jornada Comercial</h3>
+                
+                <div className="grid grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 block mb-1">Origem do Contato</label>
+                    <select value={origem} onChange={(e) => setOrigem(e.target.value)} className="w-full text-xs border border-slate-350 bg-white rounded-lg px-2.5 py-1.5">
+                      <option value="Tráfego Pago">Tráfego Pago</option>
+                      <option value="Indicação">Indicação</option>
+                      <option value="WhatsApp Direto">WhatsApp Direto</option>
+                      <option value="Eventos">Eventos</option>
+                      <option value="Organic Google">Organic Google</option>
+                    </select>
                   </div>
+
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 block mb-1">Status Comercial</label>
+                    <select value={status} onChange={(e) => handleStatusChangeAction(e.target.value)} className="w-full text-xs border border-slate-350 bg-white rounded-lg px-2.5 py-1.5">
+                      <option value="Novo lead">Novo lead</option>
+                      <option value="Contato feito">Contato feito</option>
+                      <option value="Respondeu">Respondeu</option>
+                      <option value="Em qualificação">Em qualificação</option>
+                      <option value="Em negociação">Em negociação</option>
+                      <option value="Aguardando pagamento">Aguardando pagamento</option>
+                      <option value="Comprou">Comprou / Fechado</option>
+                      <option value="Sem interesse">Sem interesse</option>
+                      <option value="Retomar depois">Retomar depois</option>
+                      <option value="Perdido">Perdido</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 block mb-1">Produto de Interesse</label>
+                    <input type="text" value={produtoInteresse} onChange={(e) => setProdutoInteresse(e.target.value)} className="w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5" />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 block mb-1">Temperatura</label>
+                    <select value={temperatura} onChange={(e) => setTemperatura(e.target.value)} className="w-full text-xs border border-slate-355 bg-white rounded-lg px-2.5 py-1.5">
+                      <option value="frio">❄️ Frio</option>
+                      <option value="morno">🔥 Morno</option>
+                      <option value="quente">⚡ Quente</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 block mb-1">Objeção Principal</label>
+                    <select value={objecaoPrincipal} onChange={(e) => setObjecaoPrincipal(e.target.value)} className="w-full text-xs border border-slate-350 bg-white rounded-lg px-2.5 py-1.5">
+                      <option value="Nenhuma">Nenhuma objeção</option>
+                      <option value="Preço / Caro">Preço / Caro</option>
+                      <option value="Sem tempo">Sem tempo produtivo</option>
+                      <option value="Precisa alinhar sócio/marido">Sócio / Família</option>
+                      <option value="Dúvida de escopo">Formato / Escopo</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 block mb-1">Próximo Contato agendado</label>
+                    <input type="date" value={proximoContato} onChange={(e) => setProximoContato(e.target.value)} className="w-full text-xs border border-slate-300 bg-white rounded-lg px-2.5 py-1.5" />
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="text-[10px] font-black text-slate-500 block mb-1">Responsável Comercial (SDR/Executiva)</label>
+                    <select value={responsavel} onChange={(e) => setResponsavel(e.target.value)} className="w-full text-xs border border-slate-350 bg-white rounded-lg px-2.5 py-1.5">
+                      <option value="Ana">Ana (Comercial)</option>
+                      <option value="Liana">Liana (Geral)</option>
+                      <option value="Núria">Núria (Suporte)</option>
+                      <option value="Luiza">Luiza (Tech)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TABS 3: ALUNA/ONBOARDING */}
+            {activeSubTab === 'onboarding' && (
+              <div className="space-y-4">
+                <h3 className="text-sm font-black text-[#0A192F] uppercase border-b pb-2 tracking-tight">Controle de Aluna & Onboarding</h3>
+                
+                <div className="grid grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 block mb-1">Formação / Produto</label>
+                    <input type="text" value={formacao} onChange={(e) => setFormacao(e.target.value)} className="w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 block mb-1">Turma Cadastrada</label>
+                    <input type="text" value={turma} onChange={(e) => setTurma(e.target.value)} className="w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5" />
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="text-[10px] font-black text-slate-500 block mb-1">Status Onboarding</label>
+                    <select value={statusOnboarding} onChange={(e) => setStatusOnboarding(e.target.value)} className="w-full text-xs border border-slate-350 bg-white rounded-lg px-2.5 py-1.5">
+                      <option value="Aguardando boas-vindas">Aguardando boas-vindas</option>
+                      <option value="Aguardando formulário">Aguardando formulário</option>
+                      <option value="Aguardando grupo">Aguardando grupo</option>
+                      <option value="Aguardando Nutror">Aguardando Nutror</option>
+                      <option value="Aguardando MRP">Aguardando MRP</option>
+                      <option value="Bônus pendente">Bônus pendente</option>
+                      <option value="Acesso OK">Acesso OK</option>
+                      <option value="Com pendência">Com pendência</option>
+                      <option value="Em acompanhamento">Em acompanhamento</option>
+                      <option value="Conclído">Concluído</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-2">
+                  <label className="flex items-center gap-2 p-2 border rounded-lg bg-stone-50 cursor-pointer text-xs">
+                    <input type="checkbox" checked={entrouGrupo} onChange={(e) => setEntrouGrupo(e.target.checked)} className="rounded text-[#0A192F]" />
+                    <span>Incluso no Grupo Whats</span>
+                  </label>
+                  <label className="flex items-center gap-2 p-1.5 border rounded-lg bg-stone-50 cursor-pointer text-xs">
+                    <input type="checkbox" checked={respondeuInicial} onChange={(e) => setRespondeuInicial(e.target.checked)} className="rounded text-[#0A192F]" />
+                    <span>Diagnostic Inicial Respondido</span>
+                  </label>
+                  <label className="flex items-center gap-2 p-2 border rounded-lg bg-stone-50 cursor-pointer text-xs">
+                    <input type="checkbox" checked={acessoNutror} onChange={(e) => setAcessoNutror(e.target.checked)} className="rounded text-[#0A192F]" />
+                    <span>Acesso ao Nutror Liberado</span>
+                  </label>
+                  <label className="flex items-center gap-2 p-2 border rounded-lg bg-stone-50 cursor-pointer text-xs">
+                    <input type="checkbox" checked={acessoMRP} onChange={(e) => setAcessoMRP(e.target.checked)} className="rounded text-[#0A192F]" />
+                    <span>Acesso Planilha MRP</span>
+                  </label>
+                  <label className="col-span-2 flex items-center gap-2 p-2 border rounded-lg bg-stone-50 cursor-pointer text-xs">
+                    <input type="checkbox" checked={bonusEnviado} onChange={(e) => setBonusEnviado(e.target.checked)} className="rounded text-[#0A192F]" />
+                    <span>Bônus Físico / Digital Enviado</span>
+                  </label>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-slate-500 block mb-1">Anotações e Pendências de Onboarding</label>
+                  <textarea rows={2} value={onboardingPendencias} onChange={(e) => setOnboardingPendencias(e.target.value)} placeholder="Descreva pautas urgentes do onboarding deste contato..." className="w-full text-xs border border-slate-350 rounded-lg p-2 resize-none" />
+                </div>
+              </div>
+            )}
+
+            {/* TABS 4: SUPORTE */}
+            {activeSubTab === 'suporte' && (
+              <div className="space-y-4">
+                <h3 className="text-sm font-black text-[#0A192F] uppercase border-b pb-2 tracking-tight">Chamados e Tickets Vincunlados</h3>
+                
+                {/* Tickets list associated with person */}
+                <div className="space-y-2 max-h-[180px] overflow-y-auto">
+                  {tarefas.filter(t => t.pessoaId === pessoa.id || (email && t.email && t.email.toLowerCase() === email.toLowerCase())).map(t => (
+                    <div key={t.id} className="p-3 bg-slate-50 border rounded-lg flex justify-between items-center text-xs">
+                      <div>
+                        <strong className="text-slate-800">{t.titulo}</strong>
+                        <p className="text-[10px] text-slate-450 mt-0.5">Status: <strong className="uppercase">{t.status}</strong> • Prio: {t.prioridade}</p>
+                      </div>
+                      <span className="p-1 text-[9px] font-black uppercase text-amber-800 bg-amber-50 rounded">Suporte</span>
+                    </div>
+                  ))}
+                  {tarefas.filter(t => t.pessoaId === pessoa.id || (email && t.email && t.email.toLowerCase() === email.toLowerCase())).length === 0 && (
+                    <p className="text-xs text-slate-400 italic py-4">Nenhum chamado de suporte aberto em nome deste contato.</p>
+                  )}
+                </div>
+
+                {/* Add dynamic ticket */}
+                <div className="bg-[#0A192F]/5 p-4 rounded-xl border border-slate-200 space-y-3 pt-3 text-xs">
+                  <span className="font-extrabold text-[#0A192F] uppercase text-[10px] tracking-wider block">Abrir Novo Chamado de Suporte</span>
                   
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="Ex: Dificuldade de acesso ao login Nutror" 
+                      value={novoTicketTitle}
+                      onChange={(e) => setNovoTicketTitle(e.target.value)}
+                      className="border border-slate-300 py-1.5 px-3 rounded-lg flex-1 outline-none text-slate-800 bg-white"
+                    />
+                    <select value={novoTicketPrio} onChange={(e) => setNovoTicketPrio(e.target.value)} className="border border-slate-300 bg-white rounded-lg px-2 font-bold text-[#0A192F]">
+                      <option value="alta">🚨 Alta</option>
+                      <option value="média">⚠️ Média</option>
+                      <option value="baixa">☕ Baixa</option>
+                    </select>
+                    <button type="button" onClick={handleAddNewSupportTicket} className="px-3 py-1.5 bg-[#0A192F] hover:bg-emerald-600 font-bold rounded-lg text-white transition whitespace-nowrap">Abrir Ticket</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TABS 5: FINANCEIRO */}
+            {activeSubTab === 'financeiro' && (
+              <div className="space-y-4">
+                <h3 className="text-sm font-black text-[#0A192F] uppercase border-b pb-2 tracking-tight">Histórico Financeiro & Parcelas</h3>
+                
+                <div className="grid grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="text-[10px] font-black text-slate-50 block mb-1">Valor Combinado (Total)</label>
+                    <input type="text" value={valorCombinado} onChange={(e) => setValorCombinado(e.target.value)} className="w-full text-xs border border-slate-350 rounded-lg px-2.5 py-1.5" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-50 block mb-1">Forma de Pagamento</label>
+                    <select value={formaPagamento} onChange={(e) => setFormaPagamento(e.target.value)} className="w-full text-xs border border-slate-350 bg-white rounded-lg px-2.5 py-1.5">
+                      <option value="PIX">PIX</option>
+                      <option value="Cartão de Crédito">Cartão de Crédito</option>
+                      <option value="Boleto Bancário">Boleto Bancário</option>
+                      <option value="Link de Pagamento">Link de Pagamento</option>
+                      <option value="Doação / Cortesia">Doação / Cortesia</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-50 block mb-1">Status Financeiro</label>
+                    <select value={statusFinanceiro} onChange={(e) => setStatusFinanceiro(e.target.value)} className="w-full text-xs border border-slate-[#0A192F] bg-white rounded-lg px-2.5 py-1.5">
+                      <option value="Pago">Pago</option>
+                      <option value="Parcial">Parcial</option>
+                      <option value="Pendente">Pendente</option>
+                      <option value="Atrasado">Atrasado</option>
+                      <option value="Isento">Isento</option>
+                      <option value="Cancelado">Cancelado</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-50 block mb-1">Parcelamento</label>
+                    <input type="text" value={parcelas} onChange={(e) => setParcelas(e.target.value)} className="w-full text-xs border border-slate-350 rounded-lg px-2.5 py-1.5" />
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="text-[10px] font-black text-slate-50 block mb-1">Próximos Vencimentos agendados</label>
+                    <input type="text" value={vencimentos} onChange={(e) => setVencimentos(e.target.value)} placeholder="Ex: Dia 10/Set, Dia 10/Out..." className="w-full text-xs border border-slate-350 rounded-lg px-2.5 py-1.5" />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-[10px] font-black text-slate-50 block mb-1">Link de Comprovantes / Notas Fiscais</label>
+                    <input type="text" value={comprovantes} onChange={(e) => setComprovantes(e.target.value)} placeholder="Coloque links do Drive contendo Recibo ou PDF de contrato" className="w-full text-xs border border-slate-350 rounded-lg px-2.5 py-1.5" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-slate-50 block mb-1">Observações Gerais de Contrato</label>
+                  <textarea rows={2} value={observacoesFinanceiras} onChange={(e) => setObservacoesFinanceiras(e.target.value)} className="w-full text-xs border border-slate-350 rounded-lg p-2 resize-none" />
+                </div>
+              </div>
+            )}
+
+            {/* TABS 6: CERTIFICADOS */}
+            {activeSubTab === 'certificados' && (
+              <div className="space-y-4">
+                <h3 className="text-sm font-black text-[#0A192F] uppercase border-b pb-2 tracking-tight flex justify-between items-center">
+                  <span>Certificados Emitidos</span>
                   <button
                     type="button"
                     onClick={() => {
                       const tabEvent = new CustomEvent('change_active_tab', { detail: 'certificados' });
                       window.dispatchEvent(tabEvent);
-                      
                       setTimeout(() => {
-                        const certEvent = new CustomEvent('trigger_new_certificate', { detail: { aluno: pessoa } });
-                        window.dispatchEvent(certEvent);
+                        window.dispatchEvent(new CustomEvent('trigger_new_certificate', { detail: { aluno: pessoa } }));
                       }, 100);
-
                       onClose();
                     }}
-                    className="p-1 px-2.5 bg-[#0A192F] hover:bg-[#D4AF37] text-white hover:text-[#0A192F] text-[10px] font-bold uppercase tracking-wide rounded-md transition flex items-center gap-1 shadow-xs"
+                    className="p-1 px-2.5 bg-[#0a192f] text-[#d4af37] font-bold text-[10px] uppercase rounded-lg border border-[#D4AF37]/30 flex items-center gap-1"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    <span>Emitir Novo</span>
+                    <span>Lançar Novo</span>
                   </button>
-                </div>
+                </h3>
 
-                <div className="space-y-2">
-                  {studentCertificates.length > 0 ? (
-                    studentCertificates.map(cert => {
-                      const isSent = cert.status === 'enviado';
-                      return (
-                        <div key={cert.id} className="p-3 bg-slate-50 border border-slate-200/60 rounded-lg flex justify-between items-center text-xs">
-                          <div>
-                            <p className="font-bold text-[#0A192F]">{cert.nomeFormacao}</p>
-                            <p className="text-[10px] text-slate-400 mt-0.5">Emitido em: {cert.dataGeracao} • Carga: {cert.cargaHoraria}</p>
-                            {isSent && (
-                              <p className="text-[9px] text-indigo-700 font-extrabold flex items-center gap-0.5 mt-1 bg-indigo-50 border border-indigo-100 px-1.5 py-0.2 rounded w-fit">
-                                <Check className="w-3 h-3 text-indigo-600" /> Enviado por e-mail ({cert.dataEnvio?.split(' ')[0]})
-                              </p>
-                            )}
-                          </div>
-                          
-                          <div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                // Direct custom print popup block
-                                const printWindow = window.open('', '_blank');
-                                if (!printWindow) {
-                                  alert('Seu navegador bloqueou o pop-up de visualização do PDF. Por favor, permita pop-ups para fazer download imediato.');
-                                  return;
-                                }
-                                printWindow.document.write(`
-                                  <html>
-                                    <head>
-                                      <title>Certificado - ${cert.nomeAluno}</title>
-                                      <style>
-                                        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Inter:wght@400;600&family=Playfair+Display:ital,wght@0,600;1,400&display=swap');
-                                        body { 
-                                          margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background: #f3f4f6; font-family: 'Inter', sans-serif;
-                                        }
-                                        .cert-card {
-                                          position: relative; width: 1050px; height: 700px; background-color: #0A192F; color: white; border: 10px solid #D4AF37; box-shadow: 0 10px 30px rgba(0,0,0,0.15); padding: 60px; box-sizing: border-box; display: flex; flex-direction: column; text-align: center; justify-content: space-between; border-image: linear-gradient(to bottom right, #D4AF37, #9A7B1C, #D4AF37) 10;
-                                        }
-                                        .header { font-family: 'Cinzel', serif; letter-spacing: 4px; color: white; margin-top: 10px; }
-                                        .header h1 { font-size: 42px; margin: 0; font-weight: 700; }
-                                        .header p { font-size: 14px; margin: 5px 0 0 0; }
-                                        .content { font-family: 'Playfair Display', serif; font-size: 20px; line-height: 1.8; margin: 40px auto; max-width: 800px; }
-                                        .highlight-name { font-size: 32px; font-weight: bold; display: block; margin: 15px 0; font-family: 'Cinzel', serif; color: #D4AF37; }
-                                        .footer-info { display: flex; justify-content: space-between; align-items: flex-end; margin-top: auto; padding: 0 40px; }
-                                        .sig-block { border-top: 1.5px solid #94A3B8; padding-top: 10px; width: 250px; font-size: 12px; color: #94A3B8; }
-                                        .seal { width: 100px; height: 100px; border: 2px dashed #D4AF37; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Cinzel', serif; font-weight: bold; font-size: 10px; color: #D4AF37; letter-spacing: 1px; }
-                                        .print-btn { position: fixed; bottom: 20px; right: 20px; background: #0A192F; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 1000; }
-                                        @media print { .print-btn { display: none; } body { background: white; } .cert-card { box-shadow: none; } }
-                                      </style>
-                                    </head>
-                                    <body>
-                                      <button class="print-btn" onclick="window.print()">Imprimir / Salvar PDF</button>
-                                      <div class="cert-card">
-                                        <div class="header">
-                                          <h1>CERTIFICADO</h1>
-                                          <p>INSTITUTO LIANA GOMES</p>
-                                        </div>
-                                        <div class="content">
-                                          Certificamos que <span class="highlight-name">${cert.nomeAluno}</span> concluiu com aproveitamento a formação <strong>${cert.nomeFormacao}</strong>, com carga horária de <strong>${cert.cargaHoraria}</strong>, organizada pelo Instituto Liana Gomes, referente à <strong>${cert.turma}</strong> em ${cert.dataConclusao}.
-                                        </div>
-                                        <div class="footer-info">
-                                          <div class="sig-block">
-                                            <strong>Liana Gomes</strong><br>Mentora / Diretora Geral
-                                          </div>
-                                          <div class="seal">SELO ILG<br>OFICIAL</div>
-                                          <div class="sig-block">
-                                            Emissão: ${cert.dataEmissao}<br>Código Autenticidade: ${cert.id.toUpperCase()}
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </body>
-                                  </html>
-                                `);
-                                printWindow.document.close();
-                              }}
-                              className="px-2.5 py-1.5 border border-slate-300 hover:bg-slate-50 text-slate-700 bg-white shadow-xs rounded-lg text-[10px] font-bold tracking-wide uppercase flex items-center gap-1.5"
-                            >
-                              <Printer className="w-3.5 h-3.5 text-slate-550" />
-                              <span>Baixar PDF</span>
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div className="p-4 border border-dashed rounded-lg bg-slate-50/50 text-slate-400 flex items-center gap-2">
-                      <p className="text-[11px] text-slate-500 italic">Nenhum certificado emitido para esta aluna ainda.</p>
+                <div className="space-y-2 max-h-[220px] overflow-y-auto">
+                  {studentCertificates.map(cert => (
+                    <div key={cert.id} className="p-3 bg-slate-50 border rounded-lg flex justify-between items-center text-xs">
+                      <div>
+                        <strong className="text-slate-800 block">{cert.nomeFormacao}</strong>
+                        <span className="text-[10px] text-slate-450">Código: {cert.id.toUpperCase()} • {cert.dataGeracao}</span>
+                        {cert.status === 'enviado' && (
+                          <p className="text-[9px] text-[#0A192F] font-bold mt-1 bg-amber-50 rounded w-fit px-1">Enviado por e-mail ({cert.dataEnvio?.split(' ')[0]})</p>
+                        )}
+                      </div>
+                      <div className="flex gap-1.5">
+                        <button type="button" onClick={() => handlePrintCert(cert)} className="p-1 px-2 bg-white hover:bg-slate-100 rounded text-[10px] font-bold border">Imprimir</button>
+                        <button type="button" onClick={() => handleReemitCertMail(cert)} className="p-1 px-2 bg-white hover:bg-amber-100 rounded text-[10px] text-[#0A192F] border font-bold">Re-enviar</button>
+                      </div>
                     </div>
+                  ))}
+                  {studentCertificates.length === 0 && (
+                    <p className="text-xs text-slate-400 italic py-4">Nenhum certificado emitido para esta aluna ainda.</p>
                   )}
                 </div>
-              </section>
+              </div>
             )}
 
-            {/* CRM General Notes Area */}
-            <section className="pt-2 border-t border-slate-100">
-              <label className="text-xs font-bold uppercase text-slate-800 tracking-wider block mb-1">Observações Completas / Dores e Desejos</label>
-              <textarea 
-                rows={4} 
-                value={observacoes} 
-                onChange={(e) => setObservacoes(e.target.value)}
-                placeholder="Insira notas de ligações, metas profissionais do contato, feedbacks..."
-                className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-[#1F4E89] text-slate-800 leading-relaxed font-normal"
-              />
-            </section>
+            {/* TABS 7: HISTÓRICO TIMELINE */}
+            {activeSubTab === 'historico' && (
+              <div className="space-y-4">
+                <h3 className="text-sm font-black text-[#0A192F] uppercase border-b pb-2 tracking-tight">Timeline Histórica de Eventos</h3>
+                
+                <div className="space-y-3 max-h-[240px] overflow-y-auto pr-1">
+                  {interacoes.map((item, id) => (
+                    <div key={id} className="pl-4 border-l-2 border-slate-205 py-0.5 relative">
+                      <div className="absolute w-2 h-2 rounded-full -left-[5px] top-1.5 transition-colors bg-[#0A192F]" />
+                      <p className="text-xs text-slate-755 font-semibold">{item.text}</p>
+                      <span className="text-[10px] font-medium text-slate-400 block mt-1">{item.date}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
           </div>
 
-          {/* RIGHT PANEL: WhatsApp Integration + Interaction Timeline */}
-          <div className="lg:col-span-5 space-y-6 flex flex-col">
+          {/* RIGHT PANELS (WHATSAPP AND DISCUSSIONS) */}
+          <div className="lg:col-span-12 xl:col-span-5 space-y-6 flex flex-col lg:col-span-5 shrink-0">
             
-            {/* WHATSAPP ASSISTANT PANEL */}
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 shadow-sm space-y-4">
-              <div className="flex items-center gap-2 justify-between">
-                <div className="flex items-center gap-2 text-emerald-900 font-bold text-sm">
-                  <span className="p-1 px-1.5 bg-emerald-100 text-emerald-700 rounded-md">
-                    <MessageCircle className="w-4 h-4 inline" />
-                  </span>
-                  <span>CRM WhatsApp Assistente</span>
-                </div>
-                {telefone && (
-                  <span className="text-[10px] text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded font-extrabold uppercase">
-                    WhatsApp Pronto
-                  </span>
-                )}
-              </div>
+            {/* WHATSAPP CRM COMPONENT */}
+            <div className="bg-emerald-50/70 border border-emerald-250 p-5 rounded-2xl space-y-3.5">
+              <span className="text-[10px] bg-emerald-100 text-emerald-990 font-black px-2 py-0.5 rounded uppercase block w-fit">Central Instantânea WhatsApp</span>
               
-              <div>
-                <label className="text-xs font-semibold text-emerald-950 block mb-1">Selecione o Modelo de Mensagem:</label>
-                <select 
-                  value={selectedTemplate}
-                  onChange={(e) => handleTemplateChange(e.target.value)}
-                  className="w-full text-xs border border-emerald-300 bg-white rounded-lg px-2.5 py-1.5 outline-none text-slate-800 focus:border-emerald-500"
-                >
-                  <option value="">Modelo Manual (Em Branco)</option>
-                  
-                  <optgroup label="💼 Liana & Ana (Comercial / Vendas)">
-                    {templates.filter(t => t.category === 'Lead').map(t => (
-                      <option key={t.id} value={t.id}>{t.label}</option>
-                    ))}
-                  </optgroup>
+              <div className="space-y-2 text-xs">
+                <div>
+                  <label className="text-[10px] font-black text-slate-500 block mb-1">Pesquisar Modelo:</label>
+                  <select 
+                    value={selectedTemplate}
+                    onChange={(e) => handleTemplateChange(e.target.value)}
+                    className="w-full text-xs border border-emerald-200 bg-white rounded-lg px-2 py-1.5"
+                  >
+                    <option value="">Modelo Livre (Escrever Manual)</option>
+                    <optgroup label="💼 Comercial / Vendas">
+                      {templates.filter(t => t.category === 'Lead').map(t => (
+                        <option key={t.id} value={t.id}>{t.label}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="💻 Onboarding / Suporte">
+                      {templates.filter(t => t.category === 'Aluna').map(t => (
+                        <option key={t.id} value={t.id}>{t.label}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="💵 Cobrança">
+                      {templates.filter(t => t.category === 'Geral').map(t => (
+                        <option key={t.id} value={t.id}>{t.label}</option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </div>
 
-                  <optgroup label="💻 Núria (Onboarding / Suporte)">
-                    {templates.filter(t => t.category === 'Aluna').map(t => (
-                      <option key={t.id} value={t.id}>{t.label}</option>
-                    ))}
-                  </optgroup>
+                <div>
+                  <label className="text-[10px] font-black text-slate-500 block mb-1">Mensagem Final:</label>
+                  <textarea 
+                    rows={4} 
+                    value={messageText} 
+                    onChange={(e) => setMessageText(e.target.value)} 
+                    className="w-full border border-emerald-200 rounded-lg p-2.5 font-normal leading-relaxed bg-white/95" 
+                  />
+                </div>
 
-                  <optgroup label="💵 Cobrança & Central Financeiro">
-                    {templates.filter(t => t.category === 'Geral').map(t => (
-                      <option key={t.id} value={t.id}>{t.label}</option>
-                    ))}
-                  </optgroup>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-[10px] font-extrabold text-emerald-900 uppercase tracking-widest block mb-1">Texto de Envio (Editável):</label>
-                <textarea 
-                  rows={5}
-                  value={messageText}
-                  onChange={(e) => setMessageText(e.target.value)}
-                  placeholder="Selecione um modelo de envio ou digite uma mensagem personalizada aqui..."
-                  className="w-full text-xs border border-emerald-300 rounded-lg px-3 py-2 outline-none focus:ring-emerald-500 focus:border-emerald-500 text-slate-800 leading-relaxed font-normal bg-white/90"
-                />
-              </div>
-
-              <div className="flex gap-2">
-                <input 
-                  type="text" 
-                  value={customPhone}
-                  onChange={(e) => setCustomPhone(e.target.value)}
-                  placeholder="Número de Envio com DDD"
-                  className="text-xs border border-emerald-300 rounded-lg px-3 py-2 bg-white flex-1 outline-none text-slate-800"
-                  title="Confirme o telefone de destino"
-                />
-                <button
-                  type="button"
-                  onClick={handleSendWhatsApp}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 shadow-xs"
-                >
-                  <Send className="w-3.5 h-3.5" /> Enviar
-                </button>
+                <div className="flex gap-2">
+                  <input type="text" value={customPhone} onChange={(e) => setCustomPhone(e.target.value)} className="w-full border border-emerald-200 rounded-lg px-2 bg-white" placeholder="Fone com DDD" />
+                  <button type="button" onClick={handleSendWhatsApp} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-lg shrink-0">Disparar</button>
+                </div>
               </div>
             </div>
 
-            {/* TIMELINE INTERACTS LOG PANEL */}
-            <div className="bg-white border border-slate-200 rounded-xl p-5 flex-1 flex flex-col min-h-[300px]">
-              <h3 className="text-xs font-bold uppercase text-slate-500 tracking-wider mb-3.5 pb-1 border-b border-slate-100 flex items-center justify-between">
-                <span>Histórico & Interações</span>
-                <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.2 rounded font-semibold">{interacoes.length} Notas</span>
-              </h3>
+            {/* TEAM INTERNAL CONVERSATIONS DISCUSSION */}
+            <div className="bg-white border border-[#D4AF37]/50 p-5 rounded-2xl flex-1 flex flex-col">
+              <h4 className="font-extrabold text-xs text-[#0a192f] uppercase tracking-wider mb-2.5 pb-1.5 border-b border-stone-150 flex justify-between items-center">
+                <span>Discussão Interna Equipe</span>
+                <span className="text-[9px] bg-amber-50 text-[#0a192f] border px-1.5 py-0.5 rounded font-black">{discussaoInterna.length} Notas</span>
+              </h4>
 
-              {/* Add Interaction Custom Text Box */}
-              <div className="flex gap-1.5 mb-4 items-center">
-                <input 
-                  type="text"
-                  placeholder="Registrar ligação, e-mail recebido..."
-                  value={novaInteracao}
-                  onChange={(e) => setNovaInteracao(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleAddInteraction()}
-                  className="text-xs border border-slate-300 rounded-lg px-3 py-2 flex-1 outline-none focus:border-[#1F4E89] text-slate-800"
-                />
-                <button 
-                  onClick={handleAddInteraction}
-                  className="p-2 bg-[#0A192F] hover:bg-[#D4AF37] text-white hover:text-[#0A192F] rounded-lg transition"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Interaction List */}
-              <div className="flex-1 overflow-y-auto space-y-4 max-h-[300px] pr-1 scrollbar-thin">
-                {interacoes.map((item, idx) => (
-                  <div key={idx} className="pl-4 border-l-2 border-slate-200 hover:border-[#D4AF37] relative transition-colors py-0.5">
-                    <div className="absolute w-2 h-2 rounded-full -left-[5px] top-1.5 transition-colors bg-slate-200" />
-                    <p className="text-xs text-slate-700 leading-relaxed font-normal">{item.text}</p>
-                    <span className="text-[10px] text-slate-400 block mt-1.5 font-medium">{item.date}</span>
+              <div className="space-y-3 flex-1 overflow-y-auto max-h-[220px]">
+                {discussaoInterna.map((msg, idx) => (
+                  <div key={msg.id || idx} className="bg-slate-50 border p-2.5 rounded-lg text-xs relative group/item">
+                    <div className="flex items-center gap-1.5 mb-1 bg-stone-50/50">
+                      <span className="text-[10px]">{msg.avatar}</span>
+                      <strong className="text-slate-700 font-extrabold">{msg.autorNome}</strong>
+                      <span className="text-[9px] text-slate-400 font-normal">{msg.dataHora}</span>
+                    </div>
+                    <p className="text-slate-650 font-normal pl-4 leading-relaxed">{msg.texto}</p>
                   </div>
                 ))}
               </div>
-            </div>
 
-            {/* DISCUSSÃO INTERNA (INTERNAL DISCUSSION) */}
-            <div className="bg-white border border-[#D4AF37]/45 rounded-xl p-5 flex flex-col min-h-[300px] shadow-[#D4AF37]/5 shadow-sm">
-              <h3 className="text-xs font-bold uppercase text-slate-950 tracking-wider mb-3.5 pb-1.5 border-b border-amber-200/50 flex items-center justify-between">
-                <span className="flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5 text-[#D4AF37]" /> Discussão Interna da Equipe (Sem WhatsApp)</span>
-                <span className="text-[10px] bg-amber-50 text-[#0A192F] border border-amber-200 px-2 py-0.5 rounded font-extrabold">{discussaoInterna.length} Comentários</span>
-              </h3>
-
-              {/* Author Selector and Send box */}
-              <div className="space-y-2 mb-4">
-                <div className="flex justify-between items-center text-[10px] text-slate-500 font-bold">
-                  <span>Escrevendo como:</span>
-                  <div className="flex gap-1.5">
-                    <button 
-                      type="button"
-                      onClick={() => setDiscAutor('luiza')} 
-                      className={`px-1.5 py-0.5 rounded-lg border text-[9px] transition ${discAutor === 'luiza' ? 'bg-rose-50 text-rose-800 border-rose-300 font-extrabold shadow-2xs' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
-                    >
-                      Luiza ⚡
-                    </button>
-                    <button 
-                      type="button"
-                      onClick={() => setDiscAutor('liana')} 
-                      className={`px-1.5 py-0.5 rounded-lg border text-[9px] transition ${discAutor === 'liana' ? 'bg-amber-50 text-amber-800 border-amber-300 font-extrabold shadow-2xs' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
-                    >
-                      Liana 👑
-                    </button>
-                    <button 
-                      type="button"
-                      onClick={() => setDiscAutor('nuria')} 
-                      className={`px-1.5 py-0.5 rounded-lg border text-[9px] transition ${discAutor === 'nuria' ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-extrabold shadow-2xs' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
-                    >
-                      Núria 🌸
-                    </button>
-                    <button 
-                      type="button"
-                      onClick={() => setDiscAutor('ana')} 
-                      className={`px-1.5 py-0.5 rounded-lg border text-[9px] transition ${discAutor === 'ana' ? 'bg-indigo-50 text-indigo-800 border-indigo-300 font-extrabold shadow-2xs' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
-                    >
-                      Ana 💼
-                    </button>
+              {/* Msg Box writer */}
+              <div className="space-y-2 mt-4">
+                <div className="flex justify-between items-center text-[10px] text-slate-450 font-black">
+                  <span>Escrever como:</span>
+                  <div className="flex gap-1 bg-slate-50 rounded p-0.5 border">
+                    <button type="button" onClick={() => setDiscAutor('luiza')} className={cn("px-1 py-0.2 rounded text-[9px] transition", discAutor === 'luiza' ? 'bg-indigo-900 text-white font-bold' : 'text-slate-500')}>Luiza ⚡</button>
+                    <button type="button" onClick={() => setDiscAutor('liana')} className={cn("px-1 py-0.2 rounded text-[9px] transition", discAutor === 'liana' ? 'bg-indigo-900 text-white font-bold' : 'text-slate-500')}>Liana 👑</button>
+                    <button type="button" onClick={() => setDiscAutor('nuria')} className={cn("px-1 py-0.2 rounded text-[9px] transition", discAutor === 'nuria' ? 'bg-indigo-900 text-white font-bold' : 'text-slate-500')}>Nuria 🌸</button>
+                    <button type="button" onClick={() => setDiscAutor('ana')} className={cn("px-1 py-0.2 rounded text-[9px] transition", discAutor === 'ana' ? 'bg-indigo-900 text-white font-bold' : 'text-slate-500')}>Ana 💼</button>
                   </div>
                 </div>
 
-                <div className="flex gap-1.5 items-center">
+                <div className="flex gap-1.5">
                   <input 
-                    type="text"
-                    placeholder="Discutir o momento desse lead/aluna..."
-                    value={novaDiscMsg}
+                    type="text" 
+                    placeholder="Comentário reservado..." 
+                    value={novaDiscMsg} 
                     onChange={(e) => setNovaDiscMsg(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddDiscMsg())}
-                    className="text-xs border border-slate-300 rounded-lg px-3 py-2 flex-1 outline-none focus:border-[#D4AF37] text-slate-800 bg-[#FCFBF9]"
+                    className="border flex-1 inline p-2 rounded-lg text-xs" 
+                    title="Tecle enter para enviar"
                   />
-                  <button 
-                    type="button"
-                    onClick={handleAddDiscMsg}
-                    className="p-2 bg-[#0A192F] hover:bg-[#D4AF37] text-white hover:text-[#0A192F] rounded-lg transition"
-                    title="Enviar para discussões internas"
-                  >
-                    <Send className="w-4 h-4" />
+                  <button type="button" onClick={handleAddDiscMsg} className="p-2.5 bg-[#0a192f] hover:bg-[#D4AF37] text-white hover:text-[#0A192F] rounded-lg transition shrink-0">
+                    <Send className="w-3.5 h-3.5" />
                   </button>
                 </div>
-              </div>
-
-              {/* Discussions Live Feed */}
-              <div className="flex-1 overflow-y-auto space-y-3.5 max-h-[250px] pr-1 scrollbar-thin">
-                {discussaoInterna.length === 0 ? (
-                  <div className="p-4 text-center text-[11px] text-slate-400">Nenhuma anotação de discussão interna. Digite acima!</div>
-                ) : (
-                  discussaoInterna.map((msg, mIdx) => (
-                    <div key={msg.id || mIdx} className="bg-slate-50/50 hover:bg-slate-100/50 p-2.5 rounded-lg border border-slate-150 relative group">
-                      <div className="absolute right-2.5 top-2.5 opacity-0 group-hover:opacity-100 transition">
-                        <button 
-                          type="button" 
-                          onClick={() => handleDeleteDiscMsg(msg.id)}
-                          className="p-1 text-slate-450 hover:text-red-650 rounded transition" 
-                          title="Excluir mensagem da equipe"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                      <div className="flex items-center gap-1.5 mb-1 text-left">
-                        <span className="text-[10px] bg-slate-100 rounded-full w-4 h-4 flex items-center justify-center select-none">{msg.avatar || '⚡'}</span>
-                        <span className="text-xs font-bold text-slate-800">{msg.autorNome}</span>
-                        <span className="text-[9px] text-slate-400 font-normal">{msg.dataHora}</span>
-                      </div>
-                      <p className="text-xs text-slate-700 leading-relaxed text-left font-normal pl-5">
-                        {msg.texto}
-                      </p>
-                    </div>
-                  ))
-                )}
               </div>
             </div>
 
@@ -792,21 +900,12 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
 
         </div>
 
-        {/* Modal Actions Footer */}
-        <div className="p-4 border-t border-slate-200 bg-slate-100 flex justify-end gap-2.5 shrink-0">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold"
-          >
-            Cancelar
-          </button>
-          
-          <button
-            onClick={handleSaveAll}
-            className="px-5 py-2 bg-[#0A192F] hover:bg-[#D4AF37] text-white hover:text-[#0A192F] rounded-lg font-bold text-xs transition shadow-sm flex items-center gap-1.5"
-          >
-            <Save className="w-3.5 h-3.5" /> Salvar Tudo
+        {/* MODAL FOOTER */}
+        <div className="p-4 border-t border-slate-200 bg-slate-150 flex justify-end gap-2 shrink-0 select-none">
+          <button type="button" onClick={onClose} className="px-4 py-2 border rounded-lg bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold">Cancelar</button>
+          <button onClick={handleSaveAll} className="px-5 py-2 bg-[#0A192F] hover:bg-[#D4AF37] text-white hover:text-[#0A192F] rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-sm transition">
+            <Save className="w-3.5 h-3.5" />
+            <span>Salvar Dados Ficha</span>
           </button>
         </div>
 

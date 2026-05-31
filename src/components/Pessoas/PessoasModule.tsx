@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useStore } from '../../store';
 import { Search, Plus, List, Grid, Edit, User as UserIcon, MessageCircle } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -14,6 +14,19 @@ export function PessoasModule() {
   const [filters, setFilters] = useState({ tipoPessoa: '', status: '', temperatura: '' });
   
   const [selectedPessoa, setSelectedPessoa] = useState<any>(null);
+
+  useEffect(() => {
+    const handleFilterChange = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail) {
+        setFilters(prev => ({ ...prev, ...customEvent.detail }));
+      }
+    };
+    window.addEventListener('set_pessoas_filter', handleFilterChange);
+    return () => {
+      window.removeEventListener('set_pessoas_filter', handleFilterChange);
+    };
+  }, []);
 
   const filtered = useMemo(() => {
     return pessoas.filter(p => {
@@ -58,7 +71,7 @@ export function PessoasModule() {
             />
           </div>
           
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-3">
             <select value={filters.tipoPessoa} onChange={e => setFilters({...filters, tipoPessoa: e.target.value})} className="border border-slate-300 rounded-md px-3 py-2 text-sm bg-white outline-none focus:ring-[#1D4E89]">
               <option value="">Tipo (Todos)</option>
               <option value="lead">Lead</option>
@@ -69,29 +82,131 @@ export function PessoasModule() {
               <option value="">Status (Todos)</option>
               {Array.from(new Set(pessoas.map(p => p.status).filter(Boolean))).map(opt => <option key={opt as string} value={opt as string}>{opt}</option>)}
             </select>
+
+            <div className="flex bg-slate-100 p-1 rounded-lg shrink-0">
+              <button 
+                onClick={() => setViewMode('table')} 
+                className={cn("p-1.5 px-3 rounded-md text-xs font-bold transition flex items-center gap-1.5", viewMode === 'table' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-850')}
+              >
+                <List className="w-3.5 h-3.5" /> Tabela
+              </button>
+              <button 
+                onClick={() => setViewMode('cards')} 
+                className={cn("p-1.5 px-3 rounded-md text-xs font-bold transition flex items-center gap-1.5", viewMode === 'cards' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-[#0A192F]')}
+              >
+                <Grid className="w-3.5 h-3.5" /> Cards
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
-          <table className="min-w-full divide-y divide-slate-200">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="px-5 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Nome</th>
-                <th className="px-5 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Tipo</th>
-                <th className="px-5 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">WhatsApp</th>
-                <th className="px-5 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Produto / Turma</th>
-                <th className="px-5 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                <th className="px-5 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Temperatura</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-slate-100">
-              {filtered.map((item: any) => (
-                <tr key={item.id} onClick={() => setSelectedPessoa(item)} className="hover:bg-slate-50/80 cursor-pointer transition-colors">
-                  <td className="px-5 py-4 text-sm text-slate-800 font-bold">{item.nome}</td>
-                  <td className="px-5 py-4 text-sm">{renderBadge(item.tipoPessoa)}</td>
-                  <td className="px-5 py-4 text-sm text-slate-500 font-medium">
-                    <div className="flex items-center gap-1.5 group/wa">
-                      <span>{item.telefone || '-'}</span>
+        {viewMode === 'table' ? (
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <table className="min-w-full divide-y divide-slate-200">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="px-5 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Nome</th>
+                  <th className="px-5 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Tipo</th>
+                  <th className="px-5 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">WhatsApp</th>
+                  <th className="px-5 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Produto / Turma</th>
+                  <th className="px-5 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                  <th className="px-5 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Temperatura</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-slate-100">
+                {filtered.map((item: any) => (
+                  <tr key={item.id} onClick={() => setSelectedPessoa(item)} className="hover:bg-slate-50/80 cursor-pointer transition-colors">
+                    <td className="px-5 py-4 text-sm text-slate-800 font-bold">{item.nome}</td>
+                    <td className="px-5 py-4 text-sm">{renderBadge(item.tipoPessoa)}</td>
+                    <td className="px-5 py-4 text-sm text-slate-500 font-medium">
+                      <div className="flex items-center gap-1.5 group/wa">
+                        <span>{item.telefone || '-'}</span>
+                        {item.telefone && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              let cleanPhone = String(item.telefone).replace(/\D/g, '');
+                              if (cleanPhone.length > 0 && !cleanPhone.startsWith('55') && cleanPhone.length <= 11) {
+                                cleanPhone = '55' + cleanPhone;
+                              }
+                              window.open(`https://api.whatsapp.com/send?phone=${cleanPhone}`, '_blank', 'noreferrer,noopener');
+                            }}
+                            className="p-1 text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors opacity-0 group-hover/wa:opacity-100 focus:opacity-100"
+                            title="Falar direto no WhatsApp"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-500 truncate max-w-[200px]">{item.produtoInteresse || item.produtoComprado}</td>
+                    <td className="px-4 py-3 text-sm">{renderBadge(item.status)}</td>
+                    <td className="px-4 py-3 text-sm">{renderBadge(item.temperatura)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {filtered.map((item: any) => {
+              const isLead = (item.tipoPessoa || 'lead') === 'lead';
+              return (
+                <div 
+                  key={item.id} 
+                  onClick={() => setSelectedPessoa(item)}
+                  className="bg-white border border-slate-200/90 hover:border-[#0A192F]/45 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between gap-4 text-slate-700"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <h4 className="font-extrabold text-[#0A192F] text-sm truncate">{item.nome}</h4>
+                        <span className="text-[10px] text-slate-400 font-bold block mt-0.5">{item.email || 'Sem e-mail cadastrado'}</span>
+                      </div>
+                      <span className="shrink-0">{renderBadge(item.tipoPessoa)}</span>
+                    </div>
+
+                    <div className="space-y-1 bg-stone-55/70 p-3 rounded-xl border border-slate-100 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-slate-450 font-semibold">Responsável:</span>
+                        <span className="font-bold text-slate-800 uppercase">{item.responsavel || 'Ana'}</span>
+                      </div>
+                      <div className="flex justify-between mt-1">
+                        <span className="text-slate-450 font-semibold">Status Geral:</span>
+                        <span className="font-bold text-[#0A192F]">{item.status || 'Novo'}</span>
+                      </div>
+                      {isLead ? (
+                        <>
+                          <div className="flex justify-between mt-1">
+                            <span className="text-slate-450 font-semibold">Interesse:</span>
+                            <span className="font-bold text-slate-700 truncate max-w-[140px]">{item.produtoInteresse || 'Não informado'}</span>
+                          </div>
+                          {item.proximoContato && (
+                            <div className="flex justify-between mt-1 text-rose-700 font-black">
+                              <span>Próx. Contato:</span>
+                              <span>📅 {item.proximoContato}</span>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex justify-between mt-1">
+                            <span className="text-slate-450 font-semibold">Formação:</span>
+                            <span className="font-bold text-slate-700 truncate max-w-[140px]">{item.produtoComprado || item.formacao || 'Turma Ativa'}</span>
+                          </div>
+                          <div className="flex justify-between mt-1">
+                            <span className="text-slate-450 font-semibold">Onboarding status:</span>
+                            <span className="font-bold text-emerald-700 font-mono text-[10px] uppercase bg-emerald-50 px-1 py-0.2 rounded">{item.statusOnboarding || 'Acesso OK'}</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-slate-100 pt-3">
+                    <span className="text-[10px] text-slate-400 font-bold font-mono">{item.telefone || '-'}</span>
+                    
+                    <div className="flex gap-2">
                       {item.telefone && (
                         <button
                           onClick={(e) => {
@@ -102,22 +217,20 @@ export function PessoasModule() {
                             }
                             window.open(`https://api.whatsapp.com/send?phone=${cleanPhone}`, '_blank', 'noreferrer,noopener');
                           }}
-                          className="p-1 text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors opacity-0 group-hover/wa:opacity-100 focus:opacity-100"
-                          title="Falar direto no WhatsApp"
+                          className="p-1.5 px-3 bg-emerald-55 hover:bg-emerald-100 text-emerald-800 rounded-lg text-[10px] font-extrabold flex items-center gap-1 transition"
+                          title="Chamar no WhatsApp"
                         >
-                          <MessageCircle className="w-3.5 h-3.5" />
+                          <MessageCircle className="w-3.5 h-3.5 text-emerald-600" /> Whats
                         </button>
                       )}
+                      <button className="p-1.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-extrabold transition">Ficha</button>
                     </div>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-slate-500 truncate max-w-[200px]">{item.produtoInteresse || item.produtoComprado}</td>
-                  <td className="px-4 py-3 text-sm">{renderBadge(item.status)}</td>
-                  <td className="px-4 py-3 text-sm">{renderBadge(item.temperatura)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
       
       {selectedPessoa && (

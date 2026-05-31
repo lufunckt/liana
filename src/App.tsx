@@ -7,6 +7,9 @@ import React, { useState, useEffect } from 'react';
 import { Login, ProfileSelector } from './components/Login';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
+import { MeuPainel } from './components/MeuPainel';
+import { PrioridadesHoje } from './components/PrioridadesHoje';
+import { BuscaGlobal } from './components/BuscaGlobal';
 
 import { PessoasModule } from './components/Pessoas/PessoasModule';
 import { ComercialModule } from './components/Comercial/ComercialModule';
@@ -23,6 +26,7 @@ import { ReunioesModule } from './components/Reunioes/ReunioesModule';
 import { WorkspaceCriativoModule } from './components/WorkspaceCriativo/WorkspaceCriativoModule';
 import { ComunicacaoInternaModule } from './components/ComunicacaoInterna/ComunicacaoInternaModule';
 import { AgenteSocialSellerModule } from './components/AgenteSocialSeller/AgenteSocialSellerModule';
+import { PessoaFicha } from './components/Pessoas/PessoaFicha';
 import { seedDatabase } from './data/seed_firebase';
 import { AppData } from './types';
 import { ALL_SCHEMAS } from './data/schemas';
@@ -33,8 +37,9 @@ import { FirebaseProvider } from './lib/FirebaseProvider';
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'pessoas' | 'comercial' | 'alunos' | 'tarefas_suporte' | 'materiais' | 'importar' | 'espacos' | 'financeiro' | 'whatsapp' | 'planilhas' | 'certificados' | 'salas_reuniao' | 'workspace_criativo' | 'comunicacao_interna' | 'agente_social_seller'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'meu_painel' | 'pessoas' | 'comercial' | 'alunos' | 'tarefas_suporte' | 'materiais' | 'importar' | 'espacos' | 'financeiro' | 'whatsapp' | 'planilhas' | 'certificados' | 'salas_reuniao' | 'workspace_criativo' | 'comunicacao_interna' | 'agente_social_seller' | 'prioridades_hoje' | 'busca_global'>('dashboard');
   const [selectedProfile, setSelectedProfile] = useState<string | null>(null);
+  const [fichaPessoa, setFichaPessoa] = useState<any>(null);
 
   useEffect(() => {
     // Check if there is a saved profile in local storage
@@ -67,8 +72,18 @@ export default function App() {
       }
     };
     window.addEventListener('change_active_tab', handleTabChange);
+
+    const handleOpenFicha = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail) {
+        setFichaPessoa(customEvent.detail);
+      }
+    };
+    window.addEventListener('open_pessoa_ficha', handleOpenFicha);
+
     return () => {
       window.removeEventListener('change_active_tab', handleTabChange);
+      window.removeEventListener('open_pessoa_ficha', handleOpenFicha);
     };
   }, []);
 
@@ -106,6 +121,7 @@ export default function App() {
     <FirebaseProvider>
       <Layout activeTab={activeTab} setActiveTab={setActiveTab} onLogout={handleLogout} onSwapProfile={handleSwapProfile} selectedProfile={selectedProfile}>
         {activeTab === 'dashboard' && <Dashboard />}
+        {activeTab === 'meu_painel' && <MeuPainel setActiveTab={setActiveTab} />}
         {activeTab === 'espacos' && <EspacosModule />}
         {activeTab === 'pessoas' && <PessoasModule />}
         {activeTab === 'whatsapp' && <WhatsappModule />}
@@ -121,7 +137,16 @@ export default function App() {
         {activeTab === 'workspace_criativo' && <WorkspaceCriativoModule />}
         {activeTab === 'comunicacao_interna' && <ComunicacaoInternaModule />}
         {activeTab === 'agente_social_seller' && <AgenteSocialSellerModule />}
+        {activeTab === 'prioridades_hoje' && <PrioridadesHoje />}
+        {activeTab === 'busca_global' && <BuscaGlobal />}
       </Layout>
+
+      {fichaPessoa && (
+        <PessoaFicha 
+          pessoa={fichaPessoa} 
+          onClose={() => setFichaPessoa(null)} 
+        />
+      )}
     </FirebaseProvider>
   );
 }

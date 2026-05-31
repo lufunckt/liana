@@ -10,6 +10,19 @@ export function TarefasSuporteModule() {
   const [search, setSearch] = useState('');
   const [filterTipo, setFilterTipo] = useState('');
 
+  React.useEffect(() => {
+    const handleFilter = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail) {
+        setFilterTipo(customEvent.detail.tipo || '');
+      }
+    };
+    window.addEventListener('set_tarefas_filter', handleFilter);
+    return () => {
+      window.removeEventListener('set_tarefas_filter', handleFilter);
+    };
+  }, []);
+
   const filtered = tarefas.filter(t => {
     if (search && !t.titulo?.toLowerCase().includes(search.toLowerCase())) return false;
     if (filterTipo && t.tipo !== filterTipo) return false;
