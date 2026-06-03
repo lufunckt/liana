@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useStore } from '../../store';
 import { Search, Plus, List, Grid, Edit, User as UserIcon, MessageCircle } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { cn, normalizeStatusSlug, getStatusLabel } from '../../lib/utils';
 import { exportToCsv } from '../../lib/csv';
 import { PessoaFicha } from './PessoaFicha';
 
@@ -32,7 +32,7 @@ export function PessoasModule() {
     return pessoas.filter(p => {
       if (search && !p.nome?.toLowerCase().includes(search.toLowerCase()) && !p.email?.toLowerCase().includes(search.toLowerCase())) return false;
       if (filters.tipoPessoa && p.tipoPessoa !== filters.tipoPessoa) return false;
-      if (filters.status && p.status !== filters.status) return false;
+      if (filters.status && normalizeStatusSlug(p.status) !== normalizeStatusSlug(filters.status)) return false;
       if (filters.temperatura && p.temperatura !== filters.temperatura) return false;
       return true;
     });
@@ -78,9 +78,18 @@ export function PessoasModule() {
               <option value="aluna">Aluna</option>
               <option value="ex-aluna">Ex-aluna</option>
             </select>
-            <select value={filters.status} onChange={e => setFilters({...filters, status: e.target.value})} className="border border-slate-300 rounded-md px-3 py-2 text-sm bg-white outline-none focus:ring-[#1D4E89]">
+            <select value={normalizeStatusSlug(filters.status)} onChange={e => setFilters({...filters, status: e.target.value})} className="border border-slate-300 rounded-md px-3 py-2 text-sm bg-white outline-none focus:ring-[#1D4E89]">
               <option value="">Status (Todos)</option>
-              {Array.from(new Set(pessoas.map(p => p.status).filter(Boolean))).map(opt => <option key={opt as string} value={opt as string}>{opt}</option>)}
+              <option value="novo-lead">Novo lead</option>
+              <option value="contato-feito">Contato feito</option>
+              <option value="respondeu">Respondeu</option>
+              <option value="em-qualificacao">Em qualificação</option>
+              <option value="em-negociacao">Em negociação</option>
+              <option value="aguardando-pagamento">Aguardando pagamento</option>
+              <option value="comprou">Comprou / Fechado</option>
+              <option value="sem-interesse">Sem interesse</option>
+              <option value="retomar-depois">Retomar depois</option>
+              <option value="perdido">Perdido</option>
             </select>
 
             <div className="flex bg-slate-100 p-1 rounded-lg shrink-0">
@@ -140,7 +149,7 @@ export function PessoasModule() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-sm text-slate-500 truncate max-w-[200px]">{item.produtoInteresse || item.produtoComprado}</td>
-                    <td className="px-4 py-3 text-sm">{renderBadge(item.status)}</td>
+                    <td className="px-4 py-3 text-sm">{renderBadge(getStatusLabel(item.status))}</td>
                     <td className="px-4 py-3 text-sm">{renderBadge(item.temperatura)}</td>
                   </tr>
                 ))}
@@ -173,7 +182,7 @@ export function PessoasModule() {
                       </div>
                       <div className="flex justify-between mt-1">
                         <span className="text-slate-450 font-semibold">Status Geral:</span>
-                        <span className="font-bold text-[#0A192F]">{item.status || 'Novo'}</span>
+                        <span className="font-bold text-[#0A192F]">{getStatusLabel(item.status) || 'Novo'}</span>
                       </div>
                       {isLead ? (
                         <>

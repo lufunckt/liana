@@ -7,7 +7,7 @@ import {
   DollarSign, Mail, Phone, ExternalLink, HelpCircle, CheckCircle, FileText,
   UserCheck, Award
 } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn, getTodayString, normalizeStatusSlug, normalizeOnboardingSlug } from '../lib/utils';
 import { PessoaFicha } from './Pessoas/PessoaFicha';
 
 interface MeuPainelProps {
@@ -15,7 +15,7 @@ interface MeuPainelProps {
 }
 
 export function MeuPainel({ setActiveTab }: MeuPainelProps) {
-  const { data, updateModuleData } = useStore();
+  const { data } = useStore();
   
   // Active Profile from LocalStorage
   const selectedProfile = localStorage.getItem('ilg_selected_profile') || 'ana';
@@ -29,7 +29,7 @@ export function MeuPainel({ setActiveTab }: MeuPainelProps) {
   const pagamentos = data.pagamentos || [];
   const materiais = data.materiais || [];
 
-  const todayStr = '2026-05-31'; // Baseline system date based on current local meta
+  const todayStr = getTodayString(); // Dynamic system date using central function
 
   const getProfileName = (id: string) => {
     switch(id) {
@@ -64,16 +64,16 @@ export function MeuPainel({ setActiveTab }: MeuPainelProps) {
   // ----------------------------------------------------
   const renderAnaDashboard = () => {
     const leads = pessoas.filter(p => (p.tipoPessoa || 'lead') === 'lead');
-    const leadsQuentes = leads.filter(p => p.temperatura === 'quente' && p.status !== 'comprou' && p.status !== 'perdido');
+    const leadsQuentes = leads.filter(p => p.temperatura === 'quente' && normalizeStatusSlug(p.status) !== 'comprou' && normalizeStatusSlug(p.status) !== 'perdido');
     const followupsDeHoje = leads.filter(p => p.proximoContato === todayStr);
     const followupsAtrasados = leads.filter(p => p.proximoContato && p.proximoContato < todayStr);
-    const leadsSemResposta = leads.filter(p => p.status === 'novo');
-    const negociacoesAbertas = leads.filter(p => p.status === 'em negociação');
-    const aguardandoPagamento = leads.filter(p => p.status === 'aguardando pagamento');
+    const leadsSemResposta = leads.filter(p => normalizeStatusSlug(p.status) === 'novo-lead' || normalizeStatusSlug(p.status) === 'novo');
+    const negociacoesAbertas = leads.filter(p => normalizeStatusSlug(p.status) === 'em-negociacao');
+    const aguardandoPagamento = leads.filter(p => normalizeStatusSlug(p.status) === 'aguardando-pagamento');
     
     // Objeções pendentes: leads com observações que contenham palavras de objeção ou status negociação
     const objecoesPendentes = leads.filter(p => 
-      p.status === 'em negociação' && p.observacoes && 
+      normalizeStatusSlug(p.status) === 'em-negociacao' && p.observacoes && 
       (p.observacoes.toLowerCase().includes('obje') || 
        p.observacoes.toLowerCase().includes('caro') || 
        p.observacoes.toLowerCase().includes('pensar'))
@@ -216,7 +216,7 @@ export function MeuPainel({ setActiveTab }: MeuPainelProps) {
   // PROFILE 2: NÚRIA (ONBOARDING / SUPPORT)
   // ----------------------------------------------------
   const renderNuriaDashboard = () => {
-    const students = pessoas.filter(p => p.tipoPessoa === 'aluna' || p.status === 'comprou');
+    const students = pessoas.filter(p => p.tipoPessoa === 'aluna' || normalizeStatusSlug(p.status) === 'comprou');
     
     // Checkpoints
     const semGrupo = students.filter(p => !p.entrouGrupo);
@@ -236,7 +236,7 @@ export function MeuPainel({ setActiveTab }: MeuPainelProps) {
             <p className="text-2xl font-black text-rose-500 mt-1">{semGrupo.length}</p>
           </div>
           <div className="bg-white p-4 rounded-xl border border-slate-150 shadow-xs">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sem Diagnostic Inicial</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sem Diagnóstico Inicial</p>
             <p className="text-2xl font-black text-amber-500 mt-1">{semForm.length}</p>
           </div>
           <div className="bg-white p-4 rounded-xl border border-slate-150 shadow-xs">

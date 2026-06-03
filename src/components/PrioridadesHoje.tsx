@@ -4,30 +4,31 @@ import {
   AlertTriangle, Calendar, Star, Users, CheckSquare, Award, Clock, 
   ArrowRight, FileSpreadsheet, UserPlus, Eye, Check, X, PlusCircle 
 } from 'lucide-react';
+import { getTodayString, normalizeStatusSlug } from '../lib/utils';
 
 const COMPANY_PIX_CNPJ = '51.533.488/0001-09';
 
 export function PrioridadesHoje() {
-  const { data, updateModuleData } = useStore();
+  const { data, updateSingleField, addSingleDocument } = useStore();
   const pessoas = data.pessoas || [];
   const tarefas = data.tarefas_suporte || [];
   const materiais = data.materiais || [];
 
   const [dateOffset, setDateOffset] = useState<number>(0); // 0 = Hoje, 1 = Amanhã, etc.
 
-  // Date constants
-  const todayStr = new Date().toISOString().split('T')[0];
+  // Date constants from dynamic central function
+  const todayStr = getTodayString();
 
   const prioritiesList = useMemo(() => {
     const list: any[] = [];
-
     // 1. Followups vencidos e de hoje
     pessoas.forEach(p => {
+      const pStatusNormalized = normalizeStatusSlug(p.status);
       if (p.proximoContato) {
         const isLate = p.proximoContato < todayStr;
         const isToday = p.proximoContato === todayStr;
         
-        if ((isLate || isToday) && p.status !== 'comprou' && p.status !== 'perdido') {
+        if ((isLate || isToday) && pStatusNormalized !== 'comprou' && pStatusNormalized !== 'perdido') {
           list.push({
             id: `followup_${p.id}`,
             entity: p,
@@ -50,30 +51,18 @@ export function PrioridadesHoje() {
               }
               const url = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(`Olá ${p.nome}, tudo bem? Passando para retomarmos nossa conversa...`)}`;
               window.open(url, '_blank');
-              // Auto-log interaction
-              const updatedPessoas = pessoas.map(item => {
-                if (item.id === p.id) {
-                  const updatedInteracoes = [
-                    { text: `[Auto-Atalha] Disparou follow-up urgente via link Prioridades de Hoje`, date: 'Agora', type: 'system' },
-                    ...(item.interacoes || [])
-                  ];
-                  return { ...item, status: 'contato feito', interacoes: updatedInteracoes };
-                }
-                return item;
-              });
-              await updateModuleData('pessoas', updatedPessoas);
+              // Auto-log interaction (granular update)
+              const updatedInteracoes = [
+                { text: `[Auto-Atalha] Disparou follow-up urgente via link Prioridades de Hoje`, date: 'Agora', type: 'system' },
+                ...(p.interacoes || [])
+              ];
+              await updateSingleField('pessoas', p.id, { status: 'contato-feito', interacoes: updatedInteracoes });
             },
             onDelay: async () => {
               const nextWeek = new Date();
               nextWeek.setDate(nextWeek.getDate() + 3);
               const nextWeekStr = nextWeek.toISOString().split('T')[0];
-              const updated = pessoas.map(item => {
-                if (item.id === p.id) {
-                  return { ...item, proximoContato: nextWeekStr };
-                }
-                return item;
-              });
-              await updateModuleData('pessoas', updated);
+              await updateSingleField('pessoas', p.id, { proximoContato: nextWeekStr });
               alert('Follow-up adiado em 3 dias com sucesso!');
             }
           });
@@ -81,7 +70,7 @@ export function PrioridadesHoje() {
       }
 
       // 2. Leads quentes sem retorno (temperatura quente e status novo / contato feito)
-      if (p.temperatura === 'quente' && (p.status === 'novo' || p.status === 'contato feito')) {
+      if (p.temperatura === 'quente' && (pStatusNormalized === 'novo-lead' || pStatusNormalized === 'contato-feito')) {
         list.push({
           id: `hot_lead_${p.id}`,
           entity: p,
@@ -103,7 +92,7 @@ export function PrioridadesHoje() {
       }
 
       // 3. Leads aguardando pagamento
-      if (p.status === 'aguardando pagamento') {
+      if (pStatusNormalized === 'aguardando-pagamento') {
         list.push({
           id: `wait_pay_${p.id}`,
           entity: p,
@@ -181,26 +170,14 @@ export function PrioridadesHoje() {
             actionLabel: 'Concluir Chamado',
             actionClass: 'bg-emerald-600 hover:bg-emerald-700 text-white',
             onResolve: async () => {
-              const updated = tarefas.map(item => {
-                if (item.id === t.id) {
-                  return { ...item, status: 'concluído' };
-                }
-                return item;
-              });
-              await updateModuleData('tarefas_suporte', updated);
+              await updateSingleField('tarefas_suporte', t.id, { status: 'concluído' });
               alert('Tarefa marcada como Concluída no mural unificado!');
             },
             onDelay: async () => {
               const tomorrow = new Date();
               tomorrow.setDate(tomorrow.getDate() + 1);
               const tomorrowStr = tomorrow.toISOString().split('T')[0];
-              const updated = tarefas.map(item => {
-                if (item.id === t.id) {
-                  return { ...item, prazo: tomorrowStr };
-                }
-                return item;
-              });
-              await updateModuleData('tarefas_suporte', updated);
+              await updateSingleField('tarefas_suporte', t.id, { prazo: tomorrowStr });
               alert('Prazo postergado para amanhã!');
             }
           });
@@ -240,7 +217,6 @@ export function PrioridadesHoje() {
     if (!quickTitle.trim()) return;
 
     const newTask = {
-      id: 'quick_task_' + Date.now(),
       titulo: quickTitle.trim(),
       descricao: 'Cadastrada nas prioridades expressas de hoje.',
       tipo: 'tarefa',
@@ -251,8 +227,7 @@ export function PrioridadesHoje() {
       prazo: todayStr
     };
 
-    const updated = [...tarefas, newTask];
-    await updateModuleData('tarefas_suporte', updated);
+    await addSingleDocument('tarefas_suporte', newTask);
     setQuickTitle('');
     alert('Nova tarefa prioritária fixada no dia!');
   };

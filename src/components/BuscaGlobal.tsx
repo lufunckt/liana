@@ -1,9 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useStore } from '../store';
 import { 
   Search, Users, CheckSquare, Award, BookOpen, MessageSquare, 
   MapPin, Eye, ExternalLink, ArrowRight, UserCheck 
 } from 'lucide-react';
+import { cn } from '../lib/utils';
 
 export function BuscaGlobal() {
   const { data } = useStore();
@@ -12,15 +13,10 @@ export function BuscaGlobal() {
   const materiais = data.materiais || [];
 
   const [term, setTerm] = useState('');
+  const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
 
-  // Read certificates from localStorage to enable search across certificates
-  const certificates = useMemo(() => {
-    const saved = localStorage.getItem('ilg_cert_issued');
-    if (saved) {
-      try { return JSON.parse(saved) as any[]; } catch(e) {}
-    }
-    return [];
-  }, []);
+  // Read certificates from real-time database to enable search across certificates
+  const certificates = data.certificados_emitidos || [];
 
   const results = useMemo(() => {
     if (!term.trim() || term.length < 2) return null;
@@ -65,6 +61,92 @@ export function BuscaGlobal() {
     window.dispatchEvent(new CustomEvent('open_pessoa_ficha', { detail: p }));
   };
 
+  type FlatSearchItem = 
+    | { id: string; type: 'pessoa'; data: any }
+    | { id: string; type: 'tarefa'; data: any }
+    | { id: string; type: 'certificado'; data: any }
+    | { id: string; type: 'material'; data: any };
+
+  const flatItems = useMemo<FlatSearchItem[]>(() => {
+    if (!results) return [];
+    const list: FlatSearchItem[] = [];
+    results.pessoas.forEach(p => {
+      list.push({ id: `pessoa-${p.id}`, type: 'pessoa', data: p });
+    });
+    results.tarefas.forEach(t => {
+      list.push({ id: `tarefa-${t.id}`, type: 'tarefa', data: t });
+    });
+    results.certificados.forEach(c => {
+      list.push({ id: `certificado-${c.id}`, type: 'certificado', data: c });
+    });
+    results.materiais.forEach(m => {
+      list.push({ id: `material-${m.id}`, type: 'material', data: m });
+    });
+    return list;
+  }, [results]);
+
+  useEffect(() => {
+    setHighlightedIndex(-1);
+  }, [term]);
+
+  useEffect(() => {
+    if (highlightedIndex >= 0 && flatItems[highlightedIndex]) {
+      const activeId = flatItems[highlightedIndex].id;
+      const element = document.getElementById(activeId);
+      if (element) {
+        element.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }
+  }, [highlightedIndex, flatItems]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!flatItems || flatItems.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex(prev => {
+        if (prev >= flatItems.length - 1) return 0;
+        return prev + 1;
+      });
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex(prev => {
+        if (prev <= 0) return flatItems.length - 1;
+        return prev - 1;
+      });
+    } else if (e.key === 'Enter') {
+      if (highlightedIndex >= 0 && highlightedIndex < flatItems.length) {
+        e.preventDefault();
+        const selectedItem = flatItems[highlightedIndex];
+        if (selectedItem) {
+          if (selectedItem.type === 'pessoa') {
+            handleOpenFicha(selectedItem.data);
+          } else if (selectedItem.type === 'material' && selectedItem.data.url) {
+            window.open(selectedItem.data.url, '_blank', 'noreferrer,noopener');
+          } else if (selectedItem.type === 'certificado') {
+            const certData = selectedItem.data;
+            const matchedPessoa = pessoas.find(p => 
+              (p.email && certData.emailAluno && p.email.toLowerCase() === certData.emailAluno.toLowerCase()) ||
+              (p.nome && certData.nomeAluno && p.nome.toLowerCase() === certData.nomeAluno.toLowerCase())
+            );
+            if (matchedPessoa) {
+              handleOpenFicha(matchedPessoa);
+            }
+          } else if (selectedItem.type === 'tarefa') {
+            const taskData = selectedItem.data;
+            const matchedPessoa = pessoas.find(p => 
+              p.id === taskData.pessoaId || 
+              (p.email && taskData.email && p.email.toLowerCase() === taskData.email.toLowerCase())
+            );
+            if (matchedPessoa) {
+              handleOpenFicha(matchedPessoa);
+            }
+          }
+        }
+      }
+    }
+  };
+
   const hasAnyResults = results 
     ? (results.pessoas.length > 0 || results.tarefas.length > 0 || results.materiais.length > 0 || results.certificados.length > 0)
     : false;
@@ -81,7 +163,7 @@ export function BuscaGlobal() {
 
       {/* Large search input layout */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-        <label className="text-xs font-extrabold text-slate-500 uppercase tracking-widest">O que você está procurando?</label>
+        <label className="text-xs font-extrabold text-slate-500 uppercase tracking-widest">O que você está procurando? <span className="text-[10px] text-slate-400 font-normal lowercase tracking-wide">(Navegue usando ↑ ↓ e Enter)</span></label>
         <div className="relative">
           <Search className="absolute left-4 top-3.5 h-6 w-6 text-slate-400" />
           <input
@@ -89,6 +171,7 @@ export function BuscaGlobal() {
             placeholder="Digite o nome, e-mail, telefone, código de certificado, produto, tarefa..."
             value={term}
             onChange={e => setTerm(e.target.value)}
+            onKeyDown={handleKeyDown}
             className="pl-12 pr-4 w-full border border-slate-300 rounded-2xl py-3 text-sm md:text-base outline-none focus:border-[#1F4E89] text-slate-800 bg-stone-50/20 shadow-inner"
             autoFocus
           />
@@ -122,8 +205,19 @@ export function BuscaGlobal() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {results.pessoas.map((p) => {
                       const isAluna = p.tipoPessoa === 'aluna' || p.status === 'comprou';
+                      const isHighlighted = flatItems[highlightedIndex]?.id === `pessoa-${p.id}`;
                       return (
-                        <div key={p.id} className="p-4 rounded-xl border border-slate-100 bg-slate-50/40 hover:bg-slate-50 flex items-center justify-between gap-3">
+                        <div 
+                          id={`pessoa-${p.id}`}
+                          key={p.id} 
+                          onClick={() => handleOpenFicha(p)}
+                          className={cn(
+                            "p-4 rounded-xl border flex items-center justify-between gap-3 cursor-pointer transition-all duration-200",
+                            isHighlighted 
+                              ? "border-[#D4AF37] bg-amber-50/50 ring-2 ring-[#D4AF37]/35 shadow-md scale-[1.01]" 
+                              : "border-slate-100 bg-slate-50/40 hover:bg-slate-50"
+                          )}
+                        >
                           <div className="min-w-0">
                             <span className={`text-[8px] px-1.5 py-0.2 rounded font-black tracking-wider uppercase ${isAluna ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>{p.tipoPessoa || 'lead'}</span>
                             <div className="font-bold text-slate-800 mt-1 truncate">{p.nome}</div>
@@ -132,8 +226,13 @@ export function BuscaGlobal() {
                           </div>
 
                           <button
-                            onClick={() => handleOpenFicha(p)}
-                            className="p-1.5 bg-white hover:bg-[#0A192F] text-slate-700 hover:text-white rounded-lg border border-slate-200 transition shrink-0 flex items-center gap-1 text-[11px] font-bold"
+                            onClick={(e) => { e.stopPropagation(); handleOpenFicha(p); }}
+                            className={cn(
+                              "p-1.5 rounded-lg border transition shrink-0 flex items-center gap-1 text-[11px] font-bold",
+                              isHighlighted 
+                                ? "bg-[#0A192F] text-white border-transparent" 
+                                : "bg-white text-slate-700 hover:bg-[#0A192F] hover:text-white border-slate-200"
+                            )}
                           >
                             <Eye className="w-3.5 h-3.5" /> Ficha
                           </button>
@@ -153,14 +252,36 @@ export function BuscaGlobal() {
                   </h3>
 
                   <div className="space-y-2.5">
-                    {results.tarefas.map((t) => (
-                      <div key={t.id} className="p-3 bg-[#FCFBF9] border border-slate-150 rounded-lg text-slate-850">
-                        <span className="text-[8px] bg-[#0A192F]/10 px-1.5 py-0.2 rounded text-[#0A192F] uppercase font-black">{t.tipo}</span>
-                        <div className="font-bold text-xs text-slate-800 mt-1">{t.titulo}</div>
-                        {t.descricao && <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">{t.descricao}</p>}
-                        <div className="text-[10px] text-slate-400 mt-2 font-semibold">Responsável: <strong>{t.responsavel}</strong> • Status: <span className="uppercase">{t.status}</span></div>
-                      </div>
-                    ))}
+                    {results.tarefas.map((t) => {
+                      const isHighlighted = flatItems[highlightedIndex]?.id === `tarefa-${t.id}`;
+                      const handleAction = () => {
+                        const matchedPessoa = pessoas.find(p => 
+                          p.id === t.pessoaId || 
+                          (p.email && t.email && p.email.toLowerCase() === t.email.toLowerCase())
+                        );
+                        if (matchedPessoa) {
+                          handleOpenFicha(matchedPessoa);
+                        }
+                      };
+                      return (
+                        <div 
+                          id={`tarefa-${t.id}`}
+                          key={t.id} 
+                          onClick={handleAction}
+                          className={cn(
+                            "p-3 rounded-lg border text-slate-850 cursor-pointer transition-all duration-200",
+                            isHighlighted 
+                              ? "border-[#D4AF37] bg-amber-50/50 ring-2 ring-[#D4AF37]/35 shadow-sm scale-[1.01]" 
+                              : "bg-[#FCFBF9] border-slate-150 hover:bg-slate-50"
+                          )}
+                        >
+                          <span className="text-[8px] bg-[#0A192F]/10 px-1.5 py-0.2 rounded text-[#0A192F] uppercase font-black">{t.tipo}</span>
+                          <div className="font-bold text-xs text-slate-800 mt-1">{t.titulo}</div>
+                          {t.descricao && <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">{t.descricao}</p>}
+                          <div className="text-[10px] text-slate-400 mt-2 font-semibold">Responsável: <strong>{t.responsavel}</strong> • Status: <span className="uppercase">{t.status}</span></div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -174,13 +295,35 @@ export function BuscaGlobal() {
                   </h3>
 
                   <div className="space-y-2.5">
-                    {results.certificados.map((c) => (
-                      <div key={c.id} className="p-3 bg-indigo-50/30 border border-indigo-150 rounded-lg text-slate-850">
-                        <div className="font-bold text-xs text-indigo-950">{c.nomeAluno}</div>
-                        <p className="text-[11px] text-slate-600 font-medium mt-0.5">{c.nomeFormacao} • {c.turma}</p>
-                        <p className="text-[9px] text-slate-400 mt-1 italic font-mono uppercase">Autenticidade: {c.id}</p>
-                      </div>
-                    ))}
+                    {results.certificados.map((c) => {
+                      const isHighlighted = flatItems[highlightedIndex]?.id === `certificado-${c.id}`;
+                      const handleAction = () => {
+                        const matchedPessoa = pessoas.find(p => 
+                          (p.email && c.emailAluno && p.email.toLowerCase() === c.emailAluno.toLowerCase()) ||
+                          (p.nome && c.nomeAluno && p.nome.toLowerCase() === c.nomeAluno.toLowerCase())
+                        );
+                        if (matchedPessoa) {
+                          handleOpenFicha(matchedPessoa);
+                        }
+                      };
+                      return (
+                        <div 
+                          id={`certificado-${c.id}`}
+                          key={c.id} 
+                          onClick={handleAction}
+                          className={cn(
+                            "p-3 rounded-lg border text-slate-850 cursor-pointer transition-all duration-200",
+                            isHighlighted 
+                              ? "border-[#D4AF37] bg-amber-50/50 ring-2 ring-[#D4AF37]/35 shadow-sm scale-[1.01]" 
+                              : "bg-indigo-50/30 border-indigo-150 hover:bg-indigo-50/75"
+                          )}
+                        >
+                          <div className="font-bold text-xs text-indigo-950">{c.nomeAluno}</div>
+                          <p className="text-[11px] text-slate-600 font-medium mt-0.5">{c.nomeFormacao} • {c.turma}</p>
+                          <p className="text-[9px] text-slate-400 mt-1 italic font-mono uppercase">Autenticidade: {c.id}</p>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -194,27 +337,45 @@ export function BuscaGlobal() {
                   </h3>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {results.materiais.map((m) => (
-                      <div key={m.id} className="p-3.5 border border-slate-105 rounded-xl bg-slate-50/50 flex flex-col justify-between">
-                        <div>
-                          <span className="text-[9px] bg-emerald-100 px-1.5 py-0.2 rounded font-extrabold text-emerald-850 uppercase">{m.tipo || 'Material'}</span>
-                          <h4 className="font-bold text-slate-800 text-xs mt-1.5">{m.titulo}</h4>
-                          {m.descricao && <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">{m.descricao}</p>}
-                        </div>
+                    {results.materiais.map((m) => {
+                      const isHighlighted = flatItems[highlightedIndex]?.id === `material-${m.id}`;
+                      const handleAction = () => {
+                        if (m.url) {
+                          window.open(m.url, '_blank', 'noreferrer,noopener');
+                        }
+                      };
+                      return (
+                        <div 
+                          id={`material-${m.id}`}
+                          key={m.id} 
+                          onClick={handleAction}
+                          className={cn(
+                            "p-3.5 border rounded-xl flex flex-col justify-between transition-all duration-200",
+                            m.url ? "cursor-pointer" : "",
+                            isHighlighted 
+                              ? "border-[#D4AF37] bg-amber-50/50 ring-2 ring-[#D4AF37]/35 shadow-sm scale-[1.01]" 
+                              : "border-slate-105 bg-slate-50/50 hover:bg-slate-50/80"
+                          )}
+                        >
+                          <div>
+                            <span className="text-[9px] bg-emerald-105 px-1.5 py-0.2 rounded font-extrabold text-emerald-850 uppercase">{m.tipo || 'Material'}</span>
+                            <h4 className="font-bold text-slate-800 text-xs mt-1.5">{m.titulo}</h4>
+                            {m.descricao && <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">{m.descricao}</p>}
+                          </div>
 
-                        {m.url && (
-                          <a 
-                            href={m.url} 
-                            target="_blank" 
-                            rel="noreferrer" 
-                            className="mt-3.5 text-[10px] font-extrabold uppercase text-[#1F4E89] hover:text-[#D4AF37] flex items-center gap-1 w-fit"
-                          >
-                            <span>Acessar Recurso Externo</span>
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-                        )}
-                      </div>
-                    ))}
+                          {m.url && (
+                            <button 
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleAction(); }}
+                              className="mt-3.5 text-[10px] font-extrabold uppercase text-[#1F4E89] hover:text-[#D4AF37] flex items-center gap-1 w-fit border-none bg-transparent outline-none cursor-pointer text-left"
+                            >
+                              <span>Acessar Recurso Externo</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}

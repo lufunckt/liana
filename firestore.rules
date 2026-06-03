@@ -57,6 +57,12 @@ service cloud.firestore {
     function isValidPerfil(data) {
       return (!('nome' in data) || isStringSafe(data.nome)) && data.keys().size() <= 45;
     }
+    function isValidCertificadoTemplate(data) {
+      return (!('nome' in data) || isStringSafe(data.nome)) && data.keys().size() <= 30;
+    }
+    function isValidCertificadoEmitido(data) {
+      return (!('nomeAluno' in data) || isStringSafe(data.nomeAluno)) && data.keys().size() <= 30;
+    }
 
     match /perfis/{perfilId} {
       allow get: if isAdmin() && isValidId(perfilId);
@@ -136,6 +142,22 @@ service cloud.firestore {
       allow create: if isAdmin() && isValidId(tarefaId) && isValidTarefa(incoming());
       allow update: if isAdmin() && isValidId(tarefaId) && isValidTarefa(incoming());
       allow delete: if isAdmin() && isValidId(tarefaId);
+    }
+
+    match /certificados_templates/{templateId} {
+      allow get: if isAdmin() && isValidId(templateId);
+      allow list: if isAdmin();
+      allow create: if isAdmin() && isValidId(templateId) && isValidCertificadoTemplate(incoming());
+      allow update: if isAdmin() && isValidId(templateId) && isValidCertificadoTemplate(incoming());
+      allow delete: if isAdmin() && isValidId(templateId);
+    }
+
+    match /certificados_emitidos/{emitidoId} {
+      allow get: if isAdmin() && isValidId(emitidoId);
+      allow list: if isAdmin();
+      allow create: if isAdmin() && isValidId(emitidoId) && isValidCertificadoEmitido(incoming());
+      allow update: if isAdmin() && isValidId(emitidoId) && isValidCertificadoEmitido(incoming());
+      allow delete: if isAdmin() && isValidId(emitidoId);
     }
 
     match /modules/{moduleId} {

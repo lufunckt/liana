@@ -1,14 +1,76 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useStore } from '../store';
 import { 
   Briefcase, MessageSquare, Sparkles, Trash2, Pin, CheckSquare, 
-  Send, User, AlertTriangle, Lightbulb, Check, Plus, Loader2 
+  Send, User, AlertTriangle, Lightbulb, Check, Plus, Loader2, TrendingUp 
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export function Dashboard() {
   const { data, updateModuleData } = useStore();
   const tarefas = data.tarefas_suporte || [];
+  const pagamentos = data.pagamentos || [];
+
+  const formatCurrency = (val: number) => {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+  };
+
+  const { monthlyData, totalPrevistoPeriodo, totalRealizadoPeriodo } = useMemo(() => {
+    const monthsMap: Record<string, { previsto: number; realizado: number }> = {};
+    let totalPrevisto = 0;
+    let totalRealizado = 0;
+
+    pagamentos.forEach((p: any) => {
+      // Find or assign month
+      let monthKey = '2026-05'; // Default for seed objects without vencimento
+      if (p.vencimento) {
+        const parts = p.vencimento.split('-');
+        if (parts.length >= 2) {
+          monthKey = `${parts[0]}-${parts[1]}`;
+        }
+      }
+
+      const valor = parseFloat(p.valorCombinado) || 0;
+
+      if (!monthsMap[monthKey]) {
+        monthsMap[monthKey] = { previsto: 0, realizado: 0 };
+      }
+
+      monthsMap[monthKey].previsto += valor;
+      totalPrevisto += valor;
+
+      if (p.status === 'pago') {
+        monthsMap[monthKey].realizado += valor;
+        totalRealizado += valor;
+      }
+    });
+
+    const sorted = Object.keys(monthsMap)
+      .sort()
+      .map(key => {
+        const [year, month] = key.split('-');
+        const monthNames = [
+          'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
+          'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'
+        ];
+        const mIdx = parseInt(month, 10) - 1;
+        const label = (mIdx >= 0 && mIdx < 12) ? `${monthNames[mIdx]}/${year}` : key;
+
+        return {
+          monthKey: key,
+          label,
+          previsto: parseFloat(monthsMap[key].previsto.toFixed(2)),
+          realizado: parseFloat(monthsMap[key].realizado.toFixed(2))
+        };
+      });
+
+    return {
+      monthlyData: sorted,
+      totalPrevistoPeriodo: totalPrevisto,
+      totalRealizadoPeriodo: totalRealizado
+    };
+  }, [pagamentos]);
 
   // Team Profiles
   const profiles = [
@@ -302,6 +364,87 @@ export function Dashboard() {
           <MessageSquare className="w-4 h-4 shrink-0" />
           Acessar Comunicação Interna
         </button>
+      </div>
+
+      {/* "Resumo Mensal" Section */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-150 shadow-md text-left space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 border-b border-slate-100 pb-4">
+          <div>
+            <span className="p-1 px-1.5 bg-emerald-50 border border-emerald-200 rounded text-[9px] font-extrabold uppercase tracking-widest text-emerald-700">Insights Financeiros</span>
+            <h3 className="text-lg font-extrabold text-[#0A192F] flex items-center gap-2 mt-1">
+              <TrendingUp className="w-5 h-5 text-emerald-600" />
+              Resumo Mensal de Faturamento
+            </h3>
+            <p className="text-slate-500 text-xs mt-1">Comparativo de faturamento previsto vs. realizado com base nas informações registradas.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-4 text-xs font-bold">
+            <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100">
+              <span className="w-3 h-3 rounded-full bg-[#1D4E89]"></span>
+              <span className="text-slate-650">Previsto: <strong className="text-slate-900">{formatCurrency(totalPrevistoPeriodo)}</strong></span>
+            </div>
+            <div className="flex items-center gap-1.5 bg-emerald-50/50 px-2.5 py-1.5 rounded-lg border border-emerald-100">
+              <span className="w-3 h-3 rounded-full bg-emerald-500"></span>
+              <span className="text-slate-650">Realizado: <strong className="text-emerald-700">{formatCurrency(totalRealizadoPeriodo)}</strong></span>
+            </div>
+          </div>
+        </div>
+
+        {monthlyData.length > 0 ? (
+          <div className="w-full h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={monthlyData}
+                margin={{ top: 10, right: 10, left: -10, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                <XAxis 
+                  dataKey="label" 
+                  stroke="#64748B" 
+                  fontSize={11} 
+                  tickLine={false} 
+                  axisLine={false} 
+                />
+                <YAxis 
+                  stroke="#64748B" 
+                  fontSize={11} 
+                  tickLine={false} 
+                  axisLine={false}
+                  tickFormatter={(value) => `R$ ${value >= 1000 ? (value / 1000) + 'k' : value}`}
+                />
+                <Tooltip 
+                  formatter={(value: any) => [`R$ ${parseFloat(value).toLocaleString('pt-BR')}`, '']}
+                  contentStyle={{ 
+                    backgroundColor: '#ffffff', 
+                    borderRadius: '12px', 
+                    border: '1px solid #E2E8F0', 
+                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                  }} 
+                />
+                <Bar 
+                  dataKey="previsto" 
+                  name="Previsto" 
+                  fill="#1D4E89" 
+                  radius={[4, 4, 0, 0]} 
+                  barSize={32}
+                />
+                <Bar 
+                  dataKey="realizado" 
+                  name="Realizado" 
+                  fill="#10B981" 
+                  radius={[4, 4, 0, 0]} 
+                  barSize={32}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="py-12 text-center text-slate-400">
+            <TrendingUp className="w-10 h-10 mx-auto text-slate-300 animate-pulse mb-2" />
+            <p className="text-xs">Não há lançamentos de faturamento registrados para o gráfico.</p>
+          </div>
+        )}
       </div>
 
       {/* Coletive Mural (Recados & Chores & IA Generator Engine) */}

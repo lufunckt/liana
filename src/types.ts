@@ -21,4 +21,6 @@ export interface AppData {
   tarefas_suporte: any[];
   pagamentos: any[];
   perfis: any[];
+  certificados_emitidos?: any[];
+  certificados_templates?: any[];
 }

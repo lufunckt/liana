@@ -6,14 +6,16 @@ import {
   HelpCircle, CheckCircle, ShieldAlert, FileText, BadgeAlert
 } from 'lucide-react';
 import { useStore } from '../../store';
-import { cn } from '../../lib/utils';
+import { cn, showToast, normalizeStatusSlug, normalizeOnboardingSlug, getStatusLabel, getOnboardingLabel } from '../../lib/utils';
+import { usePermissions } from '../../lib/permissions';
 
 const COMPANY_PIX_CNPJ = '51.533.488/0001-09';
 
 export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => void }) {
   if (!pessoa) return null;
 
-  const { data, updateModuleData } = useStore();
+  const { data, updateSingleField, addSingleDocument } = useStore();
+  const { isReadOnly, hasPermission } = usePermissions();
   const pessoas = data.pessoas || [];
   const tarefas = data.tarefas_suporte || [];
 
@@ -78,46 +80,25 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
   const [messageText, setMessageText] = useState('');
   const [customPhone, setCustomPhone] = useState(pessoa.telefone || '');
 
-  // Academic Certificates list state
-  const [studentCertificates, setStudentCertificates] = useState<any[]>([]);
+  // Onboarding Checklist Guided dialog state
+  const [showOnboardingGuideModal, setShowOnboardingGuideModal] = useState(false);
+
+  // Read certificates dynamically from real-time database streamed state
+  const studentCertificates = React.useMemo(() => {
+    return (data.certificados_emitidos || []).filter(c => 
+      (c.emailAluno && email && c.emailAluno.toLowerCase() === email.toLowerCase()) ||
+      (c.nomeAluno && nome && c.nomeAluno.toLowerCase() === nome.toLowerCase())
+    );
+  }, [data.certificados_emitidos, email, nome]);
 
   // Intercepting Status change for "Comprou" automation trigger
   const handleStatusChangeAction = (newStatus: string) => {
-    setStatus(newStatus);
-    if (newStatus === 'Comprou' || newStatus === 'comprou') {
-      setTipoPessoa('aluna');
-      setFormacao(produtoInteresse || 'Formação Completa');
-      setStatusOnboarding('Aguardando boas-vindas');
-      
-      // Auto register timeline checklist trigger
-      const logText = `[Automação Vendas] Lead marcado como Comprou. Registrado produto comprado, iniciado checklist de Onboarding de Aluna e criado pendências de boas-vindas.`;
-      setInteracoes(prev => [
-        { text: logText, date: 'Agora', type: 'system' },
-        ...prev
-      ]);
+    const slug = normalizeStatusSlug(newStatus);
+    setStatus(slug);
+    if (slug === 'comprou') {
+      setShowOnboardingGuideModal(true);
     }
   };
-
-  useEffect(() => {
-    const loadStudentCerts = () => {
-      const savedIssued = localStorage.getItem('ilg_cert_issued');
-      if (savedIssued) {
-        try {
-          const list = JSON.parse(savedIssued) as any[];
-          const matched = list.filter(c => 
-            (c.emailAluno && email && c.emailAluno.toLowerCase() === email.toLowerCase()) ||
-            (c.nomeAluno && nome && c.nomeAluno.toLowerCase() === nome.toLowerCase())
-          );
-          setStudentCertificates(matched);
-        } catch(e) {}
-      }
-    };
-    loadStudentCerts();
-    window.addEventListener('certificados_updated', loadStudentCerts);
-    return () => {
-      window.removeEventListener('certificados_updated', loadStudentCerts);
-    };
-  }, [email, nome]);
 
   // Predefined message templates
   const templates = [
@@ -241,7 +222,7 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
       };
       
       const currentList = data.tarefas_suporte || [];
-      await updateModuleData('tarefas_suporte', [newTicket, ...currentList]);
+      await addSingleDocument('tarefas_suporte', newTicket);
       
       setInteracoes(prev => [
         { text: `[Suporte Criado] Novo ticket aberto com o assunto: "${novoTicketTitle}" e prioridade ${novoTicketPrio}`, date: 'Agora', type: 'system' },
@@ -330,6 +311,10 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
 
   // Save all states back to Cloud Firestore
   const handleSaveAll = async () => {
+    if (isReadOnly() || !hasPermission('edit_leads')) {
+      showToast('Acesso Negado: Seu perfil atual possui restrição de leitura e não pode alterar cadastros do CRM.', 'error');
+      return;
+    }
     try {
       const updatedModel: any = {
         id: pessoa.id,
@@ -337,7 +322,7 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
         email,
         telefone: customPhone || telefone,
         tipoPessoa,
-        status,
+        status: normalizeStatusSlug(status),
         temperatura,
         responsavel,
         produtoInteresse,
@@ -355,7 +340,7 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
         bonusEnviado,
         acessoNutror,
         acessoMRP,
-        statusOnboarding,
+        statusOnboarding: normalizeOnboardingSlug(statusOnboarding),
         onboardingPendencias,
 
         // Financial
@@ -368,13 +353,12 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
         observacoesFinanceiras
       };
 
-      const updatedList = pessoas.map((p: any) => p.id === pessoa.id ? updatedModel : p);
-      await updateModuleData('pessoas', updatedList);
+      await updateSingleField('pessoas', pessoa.id, updatedModel);
       
-      alert('Cadastro operacional da Ficha Única salvo com sucesso no Firestore!');
+      showToast('Cadastro operacional salvo com sucesso no Firestore!', 'success');
       onClose();
     } catch (err: any) {
-      alert('Erro ao salvar no Firestore: ' + err.message);
+      showToast('Erro ao salvar no Firestore: ' + err.message, 'error');
     }
   };
 
@@ -516,17 +500,17 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
 
                   <div>
                     <label className="text-[10px] font-black text-slate-500 block mb-1">Status Comercial</label>
-                    <select value={status} onChange={(e) => handleStatusChangeAction(e.target.value)} className="w-full text-xs border border-slate-350 bg-white rounded-lg px-2.5 py-1.5">
-                      <option value="Novo lead">Novo lead</option>
-                      <option value="Contato feito">Contato feito</option>
-                      <option value="Respondeu">Respondeu</option>
-                      <option value="Em qualificação">Em qualificação</option>
-                      <option value="Em negociação">Em negociação</option>
-                      <option value="Aguardando pagamento">Aguardando pagamento</option>
-                      <option value="Comprou">Comprou / Fechado</option>
-                      <option value="Sem interesse">Sem interesse</option>
-                      <option value="Retomar depois">Retomar depois</option>
-                      <option value="Perdido">Perdido</option>
+                    <select value={normalizeStatusSlug(status)} onChange={(e) => handleStatusChangeAction(e.target.value)} className="w-full text-xs border border-slate-350 bg-white rounded-lg px-2.5 py-1.5">
+                      <option value="novo-lead">Novo lead</option>
+                      <option value="contato-feito">Contato feito</option>
+                      <option value="respondeu">Respondeu</option>
+                      <option value="em-qualificacao">Em qualificação</option>
+                      <option value="em-negociacao">Em negociação</option>
+                      <option value="aguardando-pagamento">Aguardando pagamento</option>
+                      <option value="comprou">Comprou / Fechado</option>
+                      <option value="sem-interesse">Sem interesse</option>
+                      <option value="retomar-depois">Retomar depois</option>
+                      <option value="perdido">Perdido</option>
                     </select>
                   </div>
 
@@ -590,17 +574,17 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
 
                   <div className="col-span-2">
                     <label className="text-[10px] font-black text-slate-500 block mb-1">Status Onboarding</label>
-                    <select value={statusOnboarding} onChange={(e) => setStatusOnboarding(e.target.value)} className="w-full text-xs border border-slate-350 bg-white rounded-lg px-2.5 py-1.5">
-                      <option value="Aguardando boas-vindas">Aguardando boas-vindas</option>
-                      <option value="Aguardando formulário">Aguardando formulário</option>
-                      <option value="Aguardando grupo">Aguardando grupo</option>
-                      <option value="Aguardando Nutror">Aguardando Nutror</option>
-                      <option value="Aguardando MRP">Aguardando MRP</option>
-                      <option value="Bônus pendente">Bônus pendente</option>
-                      <option value="Acesso OK">Acesso OK</option>
-                      <option value="Com pendência">Com pendência</option>
-                      <option value="Em acompanhamento">Em acompanhamento</option>
-                      <option value="Conclído">Concluído</option>
+                    <select value={normalizeOnboardingSlug(statusOnboarding)} onChange={(e) => setStatusOnboarding(e.target.value)} className="w-full text-xs border border-slate-350 bg-white rounded-lg px-2.5 py-1.5">
+                      <option value="aguardando-boas-vindas">Aguardando boas-vindas</option>
+                      <option value="aguardando-formulario">Aguardando formulário</option>
+                      <option value="aguardando-grupo">Aguardando grupo</option>
+                      <option value="aguardando-nutror">Aguardando Nutror</option>
+                      <option value="aguardando-mrp">Aguardando MRP</option>
+                      <option value="bonus-pendente">Bônus pendente</option>
+                      <option value="acesso-ok">Acesso OK</option>
+                      <option value="com-pendencia">Com pendência</option>
+                      <option value="em-acompanhamento">Em acompanhamento</option>
+                      <option value="concluido">Concluído</option>
                     </select>
                   </div>
                 </div>
@@ -612,7 +596,7 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
                   </label>
                   <label className="flex items-center gap-2 p-1.5 border rounded-lg bg-stone-50 cursor-pointer text-xs">
                     <input type="checkbox" checked={respondeuInicial} onChange={(e) => setRespondeuInicial(e.target.checked)} className="rounded text-[#0A192F]" />
-                    <span>Diagnostic Inicial Respondido</span>
+                    <span>Diagnóstico Inicial Respondido</span>
                   </label>
                   <label className="flex items-center gap-2 p-2 border rounded-lg bg-stone-50 cursor-pointer text-xs">
                     <input type="checkbox" checked={acessoNutror} onChange={(e) => setAcessoNutror(e.target.checked)} className="rounded text-[#0A192F]" />
@@ -638,7 +622,7 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
             {/* TABS 4: SUPORTE */}
             {activeSubTab === 'suporte' && (
               <div className="space-y-4">
-                <h3 className="text-sm font-black text-[#0A192F] uppercase border-b pb-2 tracking-tight">Chamados e Tickets Vincunlados</h3>
+                <h3 className="text-sm font-black text-[#0A192F] uppercase border-b pb-2 tracking-tight">Chamados e Tickets Vinculados</h3>
                 
                 {/* Tickets list associated with person */}
                 <div className="space-y-2 max-h-[180px] overflow-y-auto">
@@ -910,6 +894,119 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
         </div>
 
       </div>
+
+      {showOnboardingGuideModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/65 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl p-6 border border-slate-200">
+            <div className="flex justify-between items-start pb-3 border-b border-slate-100">
+              <div>
+                <h4 className="font-extrabold text-[#0A192F] text-base flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-amber-500 animate-pulse" />
+                  <span>Matrícula Confirmada: Iniciar Onboarding</span>
+                </h4>
+                <p className="text-[10px] text-slate-500 font-medium">Guia passo a passo para a nova aluna: <strong>{nome}</strong></p>
+              </div>
+              <button onClick={() => setShowOnboardingGuideModal(false)} className="text-slate-400 hover:text-slate-650 transition">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="py-4 space-y-4 text-xs text-slate-700">
+              <p className="leading-relaxed">
+                Parabéns pela venda de <strong>{produtoInteresse || 'Formação ILG'}</strong>! 
+                Ao iniciar o Onboarding, o cadastro será atualizado de <strong>Lead</strong> para <strong>Aluna Ativa</strong>.
+              </p>
+
+              <div className="space-y-2.5 bg-slate-50 p-4 rounded-xl border border-slate-150">
+                <p className="font-bold text-[#0A192F] text-xs">Selecione as etapas iniciais concluídas no ato da venda:</p>
+                
+                <label className="flex items-center gap-2.5 p-2 bg-white border rounded-lg cursor-pointer hover:bg-slate-50 transition w-full">
+                  <input 
+                    type="checkbox" 
+                    checked={entrouGrupo} 
+                    onChange={(e) => setEntrouGrupo(e.target.checked)} 
+                    className="rounded text-[#0A192F]" 
+                  />
+                  <div className="ml-2.5">
+                    <span className="font-bold block">Integrar ao Grupo Whats</span>
+                    <span className="text-[10px] text-slate-450 block">Unir ao grupo vip de avisos no WhatsApp</span>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-2.5 p-2 bg-white border rounded-lg cursor-pointer hover:bg-slate-50 transition w-full">
+                  <input 
+                    type="checkbox" 
+                    checked={acessoNutror} 
+                    onChange={(e) => setAcessoNutror(e.target.checked)} 
+                    className="rounded text-[#0A192F]" 
+                  />
+                  <div className="ml-2.5">
+                    <span className="font-bold block">Liberar Acesso Nutror (EAD)</span>
+                    <span className="text-[10px] text-slate-450 block">Enviar convite de acesso à área de membros</span>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-2.5 p-2 bg-white border rounded-lg cursor-pointer hover:bg-slate-50 transition w-full">
+                  <input 
+                    type="checkbox" 
+                    checked={acessoMRP} 
+                    onChange={(e) => setAcessoMRP(e.target.checked)} 
+                    className="rounded text-[#0A192F]" 
+                  />
+                  <div className="ml-2.5">
+                    <span className="font-bold block">Liberar Planilha MRP</span>
+                    <span className="text-[10px] text-slate-450 block">Atribuir cópia da planilha operacional financeira</span>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-2.5 p-2 bg-white border rounded-lg cursor-pointer hover:bg-slate-50 transition w-full">
+                  <input 
+                    type="checkbox" 
+                    checked={respondeuInicial} 
+                    onChange={(e) => setRespondeuInicial(e.target.checked)} 
+                    className="rounded text-[#0A192F]" 
+                  />
+                  <div className="ml-2.5">
+                    <span className="font-bold block">Marcar Diagnóstico Inicial</span>
+                    <span className="text-[10px] text-slate-450 block">Concluir questionário de objetivos das aulas</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+              <button 
+                onClick={() => setShowOnboardingGuideModal(false)}
+                className="px-4 py-1.5 border hover:bg-slate-50 text-xs font-semibold rounded-lg text-slate-600 transition"
+              >
+                Voltar
+              </button>
+              <button 
+                onClick={() => {
+                  setTipoPessoa('aluna');
+                  setFormacao(produtoInteresse || 'Formação Completa');
+                  setStatusOnboarding('aguardando-boas-vindas');
+                  setInteracoes(prev => [
+                    { 
+                      text: `[Onboarding Ativado] Lead convertido com sucesso. Status Onboarding inicializado como "Aguardando boas-vindas".`, 
+                      date: 'Agora', 
+                      type: 'system' 
+                    },
+                    ...prev
+                  ]);
+                  setShowOnboardingGuideModal(false);
+                  showToast('Onboarding iniciado! Lembre-se de salvar os dados da ficha ao final.', 'success');
+                }}
+                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 transition"
+              >
+                <CheckCircle className="w-3.5 h-3.5" />
+                <span>Iniciar Onboarding</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

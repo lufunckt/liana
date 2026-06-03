@@ -9,15 +9,20 @@ import {
   Video, ExternalLink, Share2, Copy, Trash2, Maximize2, VideoOff, Info, Edit3, Save, Tag, Calendar
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { usePermissions, PermissionType, UserProfile } from '../../lib/permissions';
+import { UserPermissionsConfig } from './UserPermissionsConfig';
 
 export function EspacosModule() {
-  const { data, updateModuleData } = useStore();
+  const { data, updateModuleData, addSingleDocument, deleteSingleDocument } = useStore();
   const pessoas = data.pessoas || [];
   const tarefas = data.tarefas_suporte || [];
   const materiais = data.materiais || [];
   const perfis = data.perfis || [];
 
+  const { isAdmin, role: currentRole, hasPermission } = usePermissions();
+
   // Local states
+  const [activeMainTab, setActiveMainTab] = useState<'espacos' | 'config_usuarios'>('espacos');
   const [activeSubTab, setActiveSubTab] = useState<'liana' | 'ana' | 'nuria' | 'luiza'>('liana');
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   
@@ -29,6 +34,8 @@ export function EspacosModule() {
           id: 'liana',
           nome: 'Liana Gomes',
           cargo: 'Fundadora & Diretora Geral',
+          role: 'Diretoria Geral',
+          permissions: ['view_only', 'edit_leads', 'manage_all'],
           foto: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=300&h=300',
           perfil: 'Advogada especialista em Compliance de Gênero, Combate ao Assédio Corporativo e Desenvolvimento de Mulheres Líderes.',
           linkedin: 'liana-gomes-compliance',
@@ -40,6 +47,8 @@ export function EspacosModule() {
           id: 'ana',
           nome: 'Ana',
           cargo: 'Head de Negócios & Comercial',
+          role: 'Operador de Vendas',
+          permissions: ['view_only', 'edit_leads'],
           foto: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=300&h=300',
           perfil: 'Responsável pelo gerenciamento do CRM do Instituto, conversão de novos leads quentes, negociações de combos corporativos e faturamento inicial.',
           linkedin: 'ana-ilg-comercial',
@@ -51,6 +60,8 @@ export function EspacosModule() {
           id: 'nuria',
           nome: 'Núria',
           cargo: 'Client Success, Mídias & Operação',
+          role: 'Colaborador / Suporte',
+          permissions: ['view_only'],
           foto: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=300&h=300',
           perfil: 'Supervisora de Onboarding de novas alunas. Responsável por liberar acessos ao Nutror, alimentar o MRP Tracker, além de coordenar pautas de mídia e Instagram.',
           linkedin: 'nuria-ilg-suporte',
@@ -62,6 +73,8 @@ export function EspacosModule() {
           id: 'luiza',
           nome: 'Luiza',
           cargo: 'Tech Lead / Administradora',
+          role: 'Administrador',
+          permissions: ['view_only', 'edit_leads', 'manage_all'],
           foto: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300&h=300',
           perfil: 'Arquiteta de software e mantendedora deste Portal Integrado. Gerencia as integrações de banco de dados, regras e logs operacionais.',
           linkedin: 'luiza-ft',
@@ -442,18 +455,51 @@ export function EspacosModule() {
   return (
     <div className="flex flex-col min-h-full space-y-6 pb-12">
       
-      {/* Module Title */}
-      <div>
-        <h1 className="text-3xl font-extrabold text-[#0A192F] tracking-tight flex items-center gap-2">
-          <Briefcase className="w-8 h-8 text-[#D4AF37]" /> Espaços de Trabalho
-        </h1>
-        <p className="text-slate-500 text-sm mt-1">
-          Painéis integrados e de uso prático para a gestão de lógicas individuais de cada colaborador e diretora.
-        </p>
+      {/* Module Title & Tab Swapper */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between border-b border-slate-200 pb-4 gap-4">
+        <div>
+          <h1 className="text-3xl font-extrabold text-[#0A192F] tracking-tight flex items-center gap-2">
+            <Shield className="w-8 h-8 text-[#D4AF37]" /> Usuárias & Permissões
+          </h1>
+          <p className="text-slate-500 text-sm mt-1">
+            Espaços de trabalho individuais por funcionário e controle de perfis de acesso corporativos.
+          </p>
+        </div>
+
+        {/* Dynamic Mode Switcher */}
+        <div className="flex bg-slate-100 p-1.5 rounded-xl self-start md:self-auto shadow-inner border border-slate-200/55">
+          <button
+            onClick={() => setActiveMainTab('espacos')}
+            className={cn(
+              "px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2",
+              activeMainTab === 'espacos'
+                ? "bg-[#0A192F] text-[#D4AF37] shadow-sm font-black"
+                : "text-slate-500 hover:text-slate-800"
+            )}
+          >
+            <Briefcase className="w-3.5 h-3.5" />
+            Cockpits de Trabalho
+          </button>
+          
+          <button
+            onClick={() => setActiveMainTab('config_usuarios')}
+            className={cn(
+              "px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2",
+              activeMainTab === 'config_usuarios'
+                ? "bg-[#0A192F] text-[#D4AF37] shadow-sm font-black"
+                : "text-slate-500 hover:text-slate-800"
+            )}
+          >
+            <Shield className="w-3.5 h-3.5" />
+            Controle de Perfis ({perfis.length})
+          </button>
+        </div>
       </div>
 
-      {/* Tabs Header - Modern Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {activeMainTab === 'espacos' ? (
+        <>
+          {/* Tabs Header - Modern Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         
         {/* Liana */}
         <button
@@ -1783,6 +1829,10 @@ export function EspacosModule() {
         )}
 
       </div>
+      </>
+      ) : (
+        <UserPermissionsConfig />
+      )}
 
     </div>
   );

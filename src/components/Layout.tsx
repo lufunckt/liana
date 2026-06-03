@@ -292,11 +292,13 @@ export function Layout({ children, activeTab, setActiveTab, onLogout, onSwapProf
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-50 flex lg:hidden">
           <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xs" onClick={() => setMobileMenuOpen(false)} />
-          <div className="relative w-64 h-full bg-[#0A192F] shadow-xl flex-col flex">
+          <div className="relative w-64 h-full bg-[#0A192F] shadow-xl flex-col flex animate-in slide-in-from-left duration-200">
             <button className="absolute top-4 right-4 text-slate-300 hover:text-white" onClick={() => setMobileMenuOpen(false)}>
               <X className="w-6 h-6" />
             </button>
-            <NavContent />
+            <div className="h-full overflow-hidden flex flex-col">
+              <NavContent />
+            </div>
           </div>
         </div>
       )}
@@ -307,12 +309,12 @@ export function Layout({ children, activeTab, setActiveTab, onLogout, onSwapProf
       </div>
 
       {/* Core main cockpit area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         
         {/* Top Header navbar with quick search bar */}
-        <header className="bg-white border-b border-slate-200 flex items-center justify-between p-3.5 px-6">
+        <header className="bg-white border-b border-slate-200 flex items-center justify-between p-3.5 px-6 shrink-0 z-10">
           <div className="flex items-center gap-3">
-            <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden text-slate-605">
+            <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden text-slate-600 hover:text-slate-900 pr-1 select-none">
               <Menu className="w-5 h-5" />
             </button>
             
@@ -322,25 +324,80 @@ export function Layout({ children, activeTab, setActiveTab, onLogout, onSwapProf
                 type="text"
                 placeholder="Pesquisa rápida (Nome, e-mail...)"
                 onClick={() => setActiveTab('busca_global')}
-                className="w-full border border-slate-200 bg-slate-50 hover:bg-slate-100 rounded-lg py-1.5 pl-9 pr-3 text-xs outline-none cursor-pointer text-slate-700"
+                className="w-full border border-slate-200 bg-slate-50 hover:bg-slate-100 rounded-lg py-1.5 pl-9 pr-3 text-xs outline-none cursor-pointer text-slate-700 font-bold"
               />
               <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
             </div>
           </div>
 
           <div className="flex items-center gap-4">
-            <span className="text-[10px] bg-[#0A192F] text-[#D4AF37] px-2.5 py-1 rounded-full font-extrabold uppercase tracking-wide flex items-center gap-1.5">
+            <span className="text-[10px] bg-[#0A192F] text-[#D4AF37] px-2.5 py-1 rounded-full font-extrabold uppercase tracking-wide flex items-center gap-1.5 shadow-sm border border-[#D4AF37]/20">
               <Sparkles className="w-3 h-3 text-[#D4AF37]" /> Central Operacional ILG
             </span>
           </div>
         </header>
 
         {/* View container */}
-        <main className="flex-1 overflow-y-auto p-4 lg:p-8 bg-stone-50">
-          <div className="max-w-7xl mx-auto min-h-full w-full">
+        <main className="flex-1 overflow-y-auto p-4 lg:p-8 bg-stone-50 w-full min-h-0">
+          <div className="max-w-7xl mx-auto min-h-full w-full pb-20 lg:pb-0">
             {children}
           </div>
         </main>
+
+        {/* Mobile Bottom Tab Navigation */}
+        <div className="lg:hidden border-t border-slate-250 bg-white/95 backdrop-blur-md shadow-[0_-4px_16px_rgba(0,0,0,0.06)] h-16 shrink-0 flex items-center justify-around px-2 pb-safe z-30 select-none pb-2">
+          <button 
+            onClick={() => setActiveTab('dashboard')}
+            className={cn(
+              "flex flex-col items-center justify-center flex-1 h-full font-bold text-[9px] transition-all", 
+              activeTab === 'dashboard' ? 'text-[#0A192F]' : 'text-slate-400 hover:text-slate-650'
+            )}
+          >
+            <LayoutDashboard className={cn("w-5 h-5 transition-transform", activeTab === 'dashboard' ? 'text-[#001D4A] stroke-[2.5px] scale-110' : 'text-slate-400')} />
+            <span className="mt-0.5 scale-90">Início</span>
+          </button>
+          
+          <button 
+            onClick={() => setActiveTab('meu_painel')}
+            className={cn(
+              "flex flex-col items-center justify-center flex-1 h-full font-bold text-[9px] transition-all", 
+              activeTab === 'meu_painel' ? 'text-[#0A192F]' : 'text-slate-400 hover:text-slate-650'
+            )}
+          >
+            <UserCircle className={cn("w-5 h-5 transition-transform", activeTab === 'meu_painel' ? 'text-[#001D4A] stroke-[2.5px] scale-110' : 'text-slate-400')} />
+            <span className="mt-0.5 scale-90">Painel</span>
+          </button>
+
+          <button 
+            onClick={() => setActiveTab('pessoas')}
+            className={cn(
+              "flex flex-col items-center justify-center flex-1 h-full font-bold text-[9px] transition-all", 
+              activeTab === 'pessoas' ? 'text-[#0A192F]' : 'text-slate-400 hover:text-slate-650'
+            )}
+          >
+            <Users className={cn("w-5 h-5 transition-transform", activeTab === 'pessoas' ? 'text-[#001D4A] stroke-[2.5px] scale-110' : 'text-slate-400')} />
+            <span className="mt-0.5 scale-90">CRM</span>
+          </button>
+
+          <button 
+            onClick={() => setActiveTab('prioridades_hoje')}
+            className={cn(
+              "flex flex-col items-center justify-center flex-1 h-full font-bold text-[9px] transition-all", 
+              activeTab === 'prioridades_hoje' ? 'text-[#0A192F]' : 'text-slate-400 hover:text-slate-650'
+            )}
+          >
+            <CheckSquare className={cn("w-5 h-5 transition-transform", activeTab === 'prioridades_hoje' ? 'text-[#001D4A] stroke-[2.5px] scale-110' : 'text-slate-400')} />
+            <span className="mt-0.5 scale-90">Tarefas</span>
+          </button>
+
+          <button 
+            onClick={() => setMobileMenuOpen(true)}
+            className="flex flex-col items-center justify-center flex-1 h-full font-bold text-[9px] text-slate-400 hover:text-slate-700"
+          >
+            <Menu className="w-5 h-5 text-slate-400" />
+            <span className="mt-0.5 scale-90">Menu</span>
+          </button>
+        </div>
 
       </div>
     </div>

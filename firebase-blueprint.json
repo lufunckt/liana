@@ -142,6 +142,49 @@
         "telefone": { "type": "string" }
       },
       "required": ["nome", "cargo"]
+    },
+    "CertificateTemplate": {
+      "title": "CertificateTemplate",
+      "description": "A design template for certificates",
+      "type": "object",
+      "properties": {
+        "nome": { "type": "string" },
+        "tipo": { "type": "string" },
+        "layoutVisual": { "type": "string" },
+        "textoPrincipal": { "type": "string" },
+        "cargaHorariaPadrao": { "type": "string" },
+        "assinatura": { "type": "string" },
+        "logo": { "type": "string" },
+        "corPrincipal": { "type": "string" },
+        "corSecundaria": { "type": "string" },
+        "statusAtivo": { "type": "boolean" }
+      },
+      "required": ["nome"]
+    },
+    "IssuedCertificate": {
+      "title": "IssuedCertificate",
+      "description": "An issued certificate for a student",
+      "type": "object",
+      "properties": {
+        "nomeAluno": { "type": "string" },
+        "emailAluno": { "type": "string" },
+        "nomeFormacao": { "type": "string" },
+        "turma": { "type": "string" },
+        "cargaHoraria": { "type": "string" },
+        "dataConclusao": { "type": "string" },
+        "dataEmissao": { "type": "string" },
+        "nomeInstrutora": { "type": "string" },
+        "observacoesInternas": { "type": "string" },
+        "textoComplementar": { "type": "string" },
+        "templateId": { "type": "string" },
+        "templateNome": { "type": "string" },
+        "dataGeracao": { "type": "string" },
+        "status": { "type": "string" },
+        "dataEnvio": { "type": "string" },
+        "linkPdf": { "type": "string" },
+        "responsavel": { "type": "string" }
+      },
+      "required": ["nomeAluno", "emailAluno", "templateId"]
     }
   },
   "firestore": {
@@ -176,6 +219,14 @@
     "/tarefas/{tarefaId}": {
       "schema": { "$ref": "#/entities/Tarefa" },
       "description": "Collection of all internal tasks"
+    },
+    "/certificados_templates/{templateId}": {
+      "schema": { "$ref": "#/entities/CertificateTemplate" },
+      "description": "Collection of learning/operational certificate templates"
+    },
+    "/certificados_emitidos/{emitidoId}": {
+      "schema": { "$ref": "#/entities/IssuedCertificate" },
+      "description": "Collection of verified issued certificates"
     }
   }
 }
