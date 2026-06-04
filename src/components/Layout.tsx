@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   LayoutDashboard, Users, UserCheck, BookOpen, FileText, CreditCard, 
   LifeBuoy, CheckSquare, LogOut, Menu, X, RefreshCw, Briefcase, 
   DollarSign, MessageSquare, FileSpreadsheet, Award, Video, Sparkles, 
-  UserCircle, Search, HelpCircle, Hammer, Shield, Eye
+  UserCircle, Search, HelpCircle, Hammer, Shield, Eye, Bell
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { syncNow } from '../store';
+import { syncNow, useStore } from '../store';
+import { NotificationPanel } from './NotificationPanel';
+import { GlobalSearchModal } from './GlobalSearchModal';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -20,6 +22,102 @@ interface LayoutProps {
 export function Layout({ children, activeTab, setActiveTab, onLogout, onSwapProfile, selectedProfile }: LayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  
+  // Search and Notification visibility states
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  const { data } = useStore();
+  const pessoas = data.pessoas || [];
+  const tarefas = data.tarefas_suporte || [];
+  const pagamentos = data.pagamentos || [];
+
+  // Helper date parsing for alarms
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
+
+  const badgeCount = useMemo(() => {
+    let count = 0;
+
+    // 1. Leads followups due today or overdue
+    pessoas.forEach(p => {
+      if (p.tipoPessoa === 'lead' && p.status !== 'vendido' && p.status !== 'perdido') {
+        const contactDate = p.proximoContato || p.proximoFollowUp;
+        if (contactDate && contactDate <= todayStr) {
+          count++;
+        }
+      }
+    });
+
+    // 2. Overdue or urgent tasks
+    tarefas.forEach(t => {
+      const isCompleted = t.status === 'concluído' || t.status === 'resolvido' || t.status === 'feito';
+      if (!isCompleted && t.prazo && t.prazo <= todayStr) {
+        count++;
+      }
+    });
+
+    // 3. Late payments
+    pagamentos.forEach(pag => {
+      const isPaid = pag.status === 'pago';
+      if (!isPaid && pag.vencimento && pag.vencimento <= todayStr) {
+        count++;
+      }
+    });
+
+    return count;
+  }, [pessoas, tarefas, pagamentos, todayStr]);
+
+  // Swipe Gestures for Mobile Navigation between Main Tab Modules
+  const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    setTouchStart({ x: touch.clientX, y: touch.clientY });
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStart) return;
+    const touch = e.changedTouches[0];
+    const diffX = touchStart.x - touch.clientX;
+    const diffY = touchStart.y - touch.clientY;
+
+    const swipeThreshold = 65; // minimum horizontal px
+    const maxVerticalDiff = 45; // prevent trigger during list scrolling
+
+    if (Math.abs(diffY) < maxVerticalDiff) {
+      const mobileNavTabs = ['dashboard', 'meu_painel', 'pessoas', 'prioridades_hoje'];
+      const currentIdx = mobileNavTabs.indexOf(activeTab);
+      
+      if (currentIdx !== -1) {
+        if (diffX > swipeThreshold) {
+          // Swiped Left -> next page
+          const nextIdx = Math.min(currentIdx + 1, mobileNavTabs.length - 1);
+          if (nextIdx !== currentIdx) {
+            setActiveTab(mobileNavTabs[nextIdx]);
+            if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+              try { navigator.vibrate(10); } catch (_) {}
+            }
+          }
+        } else if (diffX < -swipeThreshold) {
+          // Swiped Right -> prev page
+          const prevIdx = Math.max(currentIdx - 1, 0);
+          if (prevIdx !== currentIdx) {
+            setActiveTab(mobileNavTabs[prevIdx]);
+            if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+              try { navigator.vibrate(10); } catch (_) {}
+            }
+          }
+        }
+      }
+    }
+    setTouchStart(null);
+  };
   
   // Work Mode selection - stored in localStorage
   const [workMode, setWorkMode] = useState<'todos' | 'comercial' | 'suporte' | 'conteudo' | 'gestao'>(() => {
@@ -318,27 +416,67 @@ export function Layout({ children, activeTab, setActiveTab, onLogout, onSwapProf
               <Menu className="w-5 h-5" />
             </button>
             
-            {/* Quick search global redirect bar */}
+            {/* Quick search global trigger input - visible on all pages */}
             <div className="relative hidden sm:block w-72">
               <input 
                 type="text"
-                placeholder="Pesquisa rápida (Nome, e-mail...)"
-                onClick={() => setActiveTab('busca_global')}
+                placeholder="Pesquisa unificada em tudo..."
+                onClick={() => setSearchOpen(true)}
                 className="w-full border border-slate-200 bg-slate-50 hover:bg-slate-100 rounded-lg py-1.5 pl-9 pr-3 text-xs outline-none cursor-pointer text-slate-700 font-bold"
+                readOnly
               />
               <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
             </div>
+
+            {/* Mobile search button indicator */}
+            <button 
+              onClick={() => setSearchOpen(true)}
+              className="sm:hidden p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-105 rounded-lg cursor-pointer"
+              title="Pesquisa global"
+            >
+              <Search className="w-4.5 h-4.5" />
+            </button>
           </div>
 
-          <div className="flex items-center gap-4">
-            <span className="text-[10px] bg-[#0A192F] text-[#D4AF37] px-2.5 py-1 rounded-full font-extrabold uppercase tracking-wide flex items-center gap-1.5 shadow-sm border border-[#D4AF37]/20">
+          <div className="flex items-center gap-3">
+            {/* Notification Bell Badge Trigger */}
+            <div className="relative">
+              <button 
+                onClick={() => setNotificationsOpen(!notificationsOpen)}
+                className={cn(
+                  "p-2 text-slate-600 hover:text-[#1F4E89] hover:bg-slate-100 rounded-full transition relative cursor-pointer select-none",
+                  badgeCount > 0 ? "bg-red-50/40 text-red-650" : ""
+                )}
+                title="Notificações e Alertas Operacionais"
+              >
+                <Bell className={cn("w-5 h-5", badgeCount > 0 && "animate-pulse")} />
+                {badgeCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-4.5 h-4.5 bg-red-600 border-2 border-white text-white text-[9px] font-black rounded-full flex items-center justify-center shadow-xs">
+                    {badgeCount}
+                  </span>
+                )}
+              </button>
+
+              {notificationsOpen && (
+                <NotificationPanel 
+                  onClose={() => setNotificationsOpen(false)} 
+                  setActiveTab={setActiveTab} 
+                />
+              )}
+            </div>
+
+            <span className="text-[10px] bg-[#0A192F] text-[#D4AF37] px-2.5 py-1 rounded-full font-extrabold uppercase tracking-wide flex items-center gap-1.5 shadow-sm border border-[#D4AF37]/20 select-none">
               <Sparkles className="w-3 h-3 text-[#D4AF37]" /> Central Operacional ILG
             </span>
           </div>
         </header>
 
-        {/* View container */}
-        <main className="flex-1 overflow-y-auto p-4 lg:p-8 bg-stone-50 w-full min-h-0">
+        {/* View container with responsive swipe gesture navigation */}
+        <main 
+          onTouchStart={handleTouchStart} 
+          onTouchEnd={handleTouchEnd}
+          className="flex-1 overflow-y-auto p-4 lg:p-8 bg-stone-50 w-full min-h-0"
+        >
           <div className="max-w-7xl mx-auto min-h-full w-full pb-20 lg:pb-0">
             {children}
           </div>
@@ -400,6 +538,15 @@ export function Layout({ children, activeTab, setActiveTab, onLogout, onSwapProf
         </div>
 
       </div>
+
+      {/* Global Search Overlay visible across all views */}
+      {searchOpen && (
+        <GlobalSearchModal 
+          onClose={() => setSearchOpen(false)} 
+          setActiveTab={setActiveTab} 
+        />
+      )}
+
     </div>
   );
 }

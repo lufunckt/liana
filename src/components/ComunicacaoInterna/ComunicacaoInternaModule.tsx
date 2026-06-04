@@ -3,7 +3,8 @@ import {
   Hash, Lock, Pin, Search, Plus, Send, MessageSquare, 
   Trash2, Edit3, CornerDownRight, Check, X, FileText, 
   Paperclip, Image, Bell, MoreHorizontal, Sparkles, 
-  Folder, ArrowRight, UserCheck, ShieldAlert, CheckSquare, ListFilter, Share2
+  Folder, ArrowRight, UserCheck, ShieldAlert, CheckSquare, ListFilter, Share2,
+  ChevronLeft
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { motion, AnimatePresence } from 'motion/react';
@@ -69,6 +70,7 @@ export function ComunicacaoInternaModule() {
 
   // Sub-tab / UI states
   const [activeChannelId, setActiveChannelId] = useState('geral');
+  const [mobileView, setMobileView] = useState<'channels' | 'chat'>('channels');
   const [channels, setChannels] = useState<Channel[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [notifications, setNotifications] = useState<InternalNotification[]>([]);
@@ -635,10 +637,10 @@ export function ComunicacaoInternaModule() {
   const unreadNotesCount = notifications.filter(n => !n.lida).length;
 
   return (
-    <div className="flex flex-col md:flex-row h-[calc(100vh-120px)] bg-[#FCFBF9] text-slate-800 rounded-2xl overflow-hidden border border-slate-200 shadow-sm" id="ilg-comunicacaointerna">
+    <div className="flex flex-col md:flex-row h-[calc(100vh-140px)] md:h-[calc(100vh-120px)] bg-[#FCFBF9] text-slate-800 rounded-2xl overflow-hidden border border-slate-200 shadow-sm" id="ilg-comunicacaointerna">
       
       {/* 1. LEFT SIDEBAR (CHANNELS PANEL) */}
-      <div className="w-full md:w-64 bg-[#0A192F] text-slate-300 flex flex-col shrink-0 border-r border-[#10243e]">
+      <div className={`w-full md:w-64 bg-[#0A192F] text-slate-300 flex-col shrink-0 border-r border-[#10243e] ${mobileView === 'channels' ? 'flex h-full' : 'hidden md:flex'}`}>
         
         {/* Workspace Brand / Team Select */}
         <div className="p-4 border-b border-[#10243e] flex items-center justify-between">
@@ -759,6 +761,7 @@ export function ComunicacaoInternaModule() {
                 onClick={() => {
                   setActiveChannelId(chan.id);
                   setActiveThreadMessage(null); // automatic reset
+                  setMobileView('chat');
                 }}
                 className={`w-full px-4 py-2 flex items-center justify-between text-left text-xs transition-all ${
                   isActive 
@@ -790,35 +793,47 @@ export function ComunicacaoInternaModule() {
       </div>
 
       {/* 2. MAIN CHAT AREA */}
-      <div className="flex-1 flex flex-col bg-[#FCFBF9] min-w-0">
+      <div className={`flex-1 flex-col bg-[#FCFBF9] min-w-0 ${mobileView === 'chat' ? 'flex h-full' : 'hidden md:flex'}`}>
         
         {/* Chat Header banner */}
         <div className="p-4 border-b border-slate-200 bg-white/50 backdrop-blur-md flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
-          <div className="text-left">
-            <div className="flex items-center gap-1.5">
-              <span className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-1 font-sans">
-                {activeChannel.isPrivate ? <Lock className="w-4 h-4 text-amber-600 shrink-0" /> : <Hash className="w-4 h-4 text-slate-500 shrink-0" />}
-                {activeChannel.nome}
-              </span>
-              <span className="text-[10px] bg-slate-100 text-[#1F4E89] px-2 py-0.5 rounded font-extrabold uppercase select-none tracking-wider">
-                {activeChannel.isPrivate ? 'Restrito' : 'Livre'}
-              </span>
+          <div className="text-left flex items-center gap-2 md:gap-0 min-w-0 w-full md:w-auto">
+            {/* Back Button for mobile */}
+            <button 
+              onClick={() => setMobileView('channels')}
+              className="md:hidden p-2 rounded-xl bg-slate-100 hover:bg-slate-200 shadow-2xs border border-slate-200 text-slate-700 font-extrabold flex items-center gap-1 shrink-0 cursor-pointer select-none"
+              title="Voltar para canais"
+            >
+              <ChevronLeft className="w-4.5 h-4.5" />
+              <span className="text-[10px] uppercase tracking-wider">Canais</span>
+            </button>
+            
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-1 font-sans truncate">
+                  {activeChannel.isPrivate ? <Lock className="w-4 h-4 text-amber-600 shrink-0" /> : <Hash className="w-4 h-4 text-slate-500 shrink-0" />}
+                  {activeChannel.nome}
+                </span>
+                <span className="text-[10px] bg-slate-100 text-[#1F4E89] px-2 py-0.5 rounded font-extrabold uppercase select-none tracking-wider shrink-0">
+                  {activeChannel.isPrivate ? 'Restrito' : 'Livre'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5 font-sans leading-relaxed truncate max-w-[200px] sm:max-w-md">
+                {activeChannel.descricao}
+              </p>
             </div>
-            <p className="text-xs text-slate-500 mt-0.5 font-sans leading-relaxed truncate max-w-lg">
-              {activeChannel.descricao}
-            </p>
           </div>
 
           {/* Quick Search & pinned toggles */}
-          <div className="flex items-center gap-2 self-start md:self-auto">
-            <div className="relative">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 self-start md:self-auto w-full md:w-auto mt-1 md:mt-0">
+            <div className="relative flex-1 sm:flex-initial min-w-[120px]">
               <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
               <input 
                 type="text" 
-                placeholder="Busca global de alunos, leads..."
+                placeholder="Busca canais..."
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
-                className="pl-8 pr-3 py-1.5 bg-slate-100/90 border border-slate-200 text-xs rounded-lg outline-none w-52 focus:border-[#1F4E89] text-slate-800"
+                className="pl-8 pr-3 py-1.5 bg-slate-100/90 border border-slate-200 text-xs rounded-lg outline-none w-full sm:w-40 lg:w-48 focus:border-[#1F4E89] text-slate-800"
               />
               {searchText && (
                 <button 
@@ -835,7 +850,7 @@ export function ComunicacaoInternaModule() {
                 setShowChannelInfoPanel(!showChannelInfoPanel);
                 setCurrentInfoTab('pinned');
               }}
-              className={`p-2 border rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
+              className={`p-1.5 sm:p-2 border rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition flex-1 sm:flex-initial ${
                 showChannelInfoPanel && currentInfoTab === 'pinned' 
                   ? 'bg-amber-50 text-amber-700 border-amber-300' 
                   : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-300'
@@ -843,7 +858,7 @@ export function ComunicacaoInternaModule() {
               title="Mensagens fixadas do canal (cronogramas, links, decisões)"
             >
               <Pin className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Fixados</span>
+              <span className="inline text-[10px] sm:text-xs">Fixados</span>
             </button>
 
             <button 
@@ -851,7 +866,7 @@ export function ComunicacaoInternaModule() {
                 setShowChannelInfoPanel(!showChannelInfoPanel);
                 setCurrentInfoTab('files');
               }}
-              className={`p-2 border rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
+              className={`p-1.5 sm:p-2 border rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition flex-1 sm:flex-initial ${
                 showChannelInfoPanel && currentInfoTab === 'files' 
                   ? 'bg-slate-100 text-[#1F4E89] border-slate-350 font-bold' 
                   : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-300'
@@ -859,7 +874,7 @@ export function ComunicacaoInternaModule() {
               title="Arquivos e links compartilhados neste canal"
             >
               <Folder className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Arquivos</span>
+              <span className="inline text-[10px] sm:text-xs">Arquivos</span>
             </button>
           </div>
         </div>
@@ -1147,44 +1162,44 @@ export function ComunicacaoInternaModule() {
             </div>
 
             {/* Attachment Simulators Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-2.5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1.5 border-t border-slate-100">
               
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider pr-1">Anexar:</span>
+              <div className="flex flex-wrap items-center gap-1">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider pr-1 hidden xs:inline">Anexar:</span>
                 
                 <button 
                   type="button" 
                   onClick={() => handleAttachVirtualFile('pdf')}
-                  className="px-2.5 py-1.2 bg-white hover:bg-slate-100 text-slate-700 text-[10px] font-semibold rounded-lg border border-slate-300 flex items-center gap-1"
+                  className="px-2 py-1 bg-white hover:bg-slate-105 text-slate-700 text-[10px] font-semibold rounded-lg border border-slate-200 flex items-center gap-1 cursor-pointer"
                 >
-                  <FileText className="w-3 h-3 text-red-500" /> PDF
+                  <FileText className="w-3 h-3 text-red-500" /> <span className="text-[9px]">PDF</span>
                 </button>
                 <button 
                   type="button" 
                   onClick={() => handleAttachVirtualFile('image')}
-                  className="px-2.5 py-1.2 bg-white hover:bg-slate-100 text-slate-700 text-[10px] font-semibold rounded-lg border border-slate-300 flex items-center gap-1"
+                  className="px-2 py-1 bg-white hover:bg-slate-105 text-slate-700 text-[10px] font-semibold rounded-lg border border-slate-200 flex items-center gap-1 cursor-pointer"
                 >
-                  <Image className="w-3 h-3 text-emerald-500" /> Imagem
+                  <Image className="w-3 h-3 text-emerald-500" /> <span className="text-[9px]">Img</span>
                 </button>
                 <button 
                   type="button" 
                   onClick={() => handleAttachVirtualFile('spreadsheet')}
-                  className="px-2.5 py-1.2 bg-white hover:bg-slate-100 text-slate-700 text-[10px] font-semibold rounded-lg border border-slate-300 flex items-center gap-1"
+                  className="px-2 py-1 bg-white hover:bg-slate-105 text-slate-700 text-[10px] font-semibold rounded-lg border border-slate-200 flex items-center gap-1 cursor-pointer"
                 >
-                  <FileText className="w-3 h-3 text-emerald-700" /> Planilha
+                  <FileText className="w-3 h-3 text-emerald-700" /> <span className="text-[9px]">XLS</span>
                 </button>
                 <button 
                   type="button" 
                   onClick={() => handleAttachVirtualFile('doc')}
-                  className="px-2.5 py-1.2 bg-white hover:bg-slate-100 text-slate-700 text-[10px] font-semibold rounded-lg border border-slate-300 flex items-center gap-1"
+                  className="px-2 py-1 bg-white hover:bg-slate-105 text-slate-700 text-[10px] font-semibold rounded-lg border border-slate-200 flex items-center gap-1 cursor-pointer"
                 >
-                  <FileText className="w-3 h-3 text-blue-500" /> Documento
+                  <FileText className="w-3 h-3 text-blue-500" /> <span className="text-[9px]">Doc</span>
                 </button>
               </div>
 
               {/* Mention Quick Adders tags */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-slate-400 font-bold">Mencionar:</span>
+              <div className="flex items-center gap-1 border-t sm:border-t-0 border-slate-100 pt-1.5 sm:pt-0 max-w-full overflow-x-auto select-none no-scrollbar">
+                <span className="text-[10px] text-slate-400 font-bold shrink-0">Mencionar:</span>
                 {OPERATORS.filter(op => op.id !== currentUser.id).map(op => (
                   <button 
                     key={op.id}
@@ -1192,7 +1207,7 @@ export function ComunicacaoInternaModule() {
                     onClick={() => {
                       setNewMessageText(prev => prev + (prev.endsWith(' ') || prev === '' ? '' : ' ') + op.handle + ' ');
                     }}
-                    className="px-2 py-0.5 bg-slate-100 hover:bg-[#D4AF37]/15 hover:text-[#D4AF37] border border-slate-200 text-slate-650 rounded text-[9px] font-bold"
+                    className="px-1.5 py-0.5 bg-slate-100 hover:bg-[#D4AF37]/15 hover:text-[#D4AF37] border border-slate-200 text-slate-650 rounded text-[9px] font-bold shrink-0 cursor-pointer"
                   >
                     {op.handle}
                   </button>
@@ -1210,9 +1225,9 @@ export function ComunicacaoInternaModule() {
         {activeThreadMessage && (
           <motion.div 
             initial={{ width: 0, opacity: 0 }}
-            animate={{ width: 340, opacity: 1 }}
+            animate={{ width: typeof window !== 'undefined' && window.innerWidth < 768 ? '100%' : 340, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
-            className="bg-[#FCFBF9] border-l border-slate-250 flex flex-col shrink-0 text-slate-800 h-full w-[340px] shadow-sm relative z-20"
+            className="bg-[#FCFBF9] border-l border-slate-250 flex flex-col shrink-0 text-slate-800 h-full w-full md:w-[340px] shadow-sm fixed md:relative inset-0 md:inset-auto z-40 md:z-20"
           >
             {/* Thread Header */}
             <div className="p-4 border-b border-slate-205 bg-slate-50 flex items-center justify-between">
@@ -1296,9 +1311,9 @@ export function ComunicacaoInternaModule() {
         {showChannelInfoPanel && (
           <motion.div 
             initial={{ width: 0, opacity: 0 }}
-            animate={{ width: 280, opacity: 1 }}
+            animate={{ width: typeof window !== 'undefined' && window.innerWidth < 768 ? '100%' : 280, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
-            className="bg-white border-l border-slate-200 flex flex-col shrink-0 text-slate-850 h-full w-[280px] shadow-sm relative z-30"
+            className="bg-white border-l border-slate-200 flex flex-col shrink-0 text-slate-850 h-full w-full md:w-[280px] shadow-sm fixed md:relative inset-0 md:inset-auto z-40 md:z-30"
           >
             {/* Header selector toggle tabs */}
             <div className="p-3 bg-slate-50 border-b border-slate-150 flex items-center justify-between">
