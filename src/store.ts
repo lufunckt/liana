@@ -319,15 +319,6 @@ export const startFirebaseListeners = () => {
   if (isListening) return;
   isListening = true;
 
-  const isDemo = localStorage.getItem('ilg_demo_authenticated') === 'true';
-  if (isDemo) {
-    console.log("Iniciando store diretamente em modo offline/demo local");
-    isLocalFallbackMode = true;
-    loadLocalState();
-    notify();
-    return;
-  }
-  
   collections.forEach(col => {
     onSnapshot(collection(db, col), (snapshot) => {
       if (isLocalFallbackMode) return;
@@ -567,6 +558,7 @@ export const useStore = () => {
 
   return { 
     data, 
+    isLocalFallbackMode,
     updateModuleData,
     updateSingleField,
     addSingleDocument,

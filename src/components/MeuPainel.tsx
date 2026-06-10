@@ -649,8 +649,8 @@ export function MeuPainel({ setActiveTab }: MeuPainelProps) {
         <div className="bg-white p-5 rounded-xl border border-slate-200 grid grid-cols-2 md:grid-cols-4 gap-3 text-left">
           <button onClick={() => setActiveTab('importar')} className="p-3 bg-slate-50 hover:bg-indigo-50 border border-slate-200 rounded-lg transition text-left space-y-1">
             <FileText className="w-5 h-5 text-indigo-600" />
-            <span className="font-black text-xs text-[#0A192F] block">Importação Segura</span>
-            <span className="text-[9px] text-slate-400 block font-semibold">Subir CSVs sem duplicados</span>
+            <span className="font-black text-xs text-[#0A192F] block">Cruzamento Nutror</span>
+            <span className="text-[9px] text-slate-400 block font-semibold">Comparar CSVs Formações</span>
           </button>
           <button onClick={() => setActiveTab('planilhas')} className="p-3 bg-slate-50 hover:bg-amber-50 border border-slate-200 rounded-lg transition text-left space-y-1">
             <Check className="w-5 h-5 text-amber-500" />
@@ -759,7 +759,7 @@ export function MeuPainel({ setActiveTab }: MeuPainelProps) {
           </button>
           <button onClick={() => { setActiveTab('importar'); }} className="p-2.5 bg-white border border-slate-200 hover:border-[#0A192F] rounded-xl text-left transition flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-sky-500" />
-            <span className="text-[11px] font-bold text-slate-700 truncate">Importar planilha</span>
+            <span className="text-[11px] font-bold text-slate-700 truncate">Cruzador de Dados</span>
           </button>
           <button onClick={() => { setActiveTab('comunicacao_interna'); }} className="p-2.5 bg-white border border-slate-200 hover:border-[#0A192F] rounded-xl text-left transition flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-[#0A192F]" />

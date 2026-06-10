@@ -12,7 +12,27 @@ async function startServer() {
 
   app.use(express.json());
 
-  // API route for AI-generated task/mural diagnostic
+  // App API endpoints
+  
+  // WhatsApp Integration Webhook (Evolution API / Z-API ready)
+  app.post("/api/whatsapp/webhook", async (req, res) => {
+    try {
+      // The Evolution API or similar provider will send POST requests here with message statuses, new chats, etc.
+      console.log("Recebido Webhook WhatsApp:", req.body);
+      
+      const payload = req.body;
+      // Validar origin/token de segurança (a ser implementado quando configurar a API)
+      const secret = process.env.WHATSAPP_WEBHOOK_SECRET;
+
+      // ... Aqui você poderá inserir a lógica para conectar essas mensagens no Firebase (coleção 'pessoas', 'interacoes', etc.) ...
+
+      res.status(200).json({ received: true });
+    } catch (error) {
+      console.error("Erro processando Webhook do WhatsApp:", error);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
+
   app.post("/api/diagnostico-mural", async (req, res) => {
     try {
       const { texto } = req.body;

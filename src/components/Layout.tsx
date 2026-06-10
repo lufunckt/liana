@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Users, UserCheck, BookOpen, FileText, CreditCard, 
   LifeBuoy, CheckSquare, LogOut, Menu, X, RefreshCw, Briefcase, 
   DollarSign, MessageSquare, FileSpreadsheet, Award, Video, Sparkles, 
-  UserCircle, Search, HelpCircle, Hammer, Shield, Eye, Bell
+  UserCircle, Search, HelpCircle, Hammer, Shield, Eye, Bell, Layers
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { syncNow, useStore } from '../store';
@@ -27,7 +27,7 @@ export function Layout({ children, activeTab, setActiveTab, onLogout, onSwapProf
   const [searchOpen, setSearchOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
-  const { data } = useStore();
+  const { data, isLocalFallbackMode } = useStore();
   const pessoas = data.pessoas || [];
   const tarefas = data.tarefas_suporte || [];
   const pagamentos = data.pagamentos || [];
@@ -219,7 +219,7 @@ export function Layout({ children, activeTab, setActiveTab, onLogout, onSwapProf
         { id: 'materiais_produtos', label: 'Produtos e Formações', icon: BookOpen, customAction: true },
         { id: 'turmas_config', label: 'Turmas', icon: Users, customAction: true },
         { id: 'espacos', label: 'Usuárias e Permissões', icon: Shield },
-        { id: 'importar', label: 'Configurações', icon: FileText }
+        { id: 'importar', label: 'Cruzador de Dados (Nutror)', icon: Layers }
       ]
     }
   ];
@@ -464,6 +464,13 @@ export function Layout({ children, activeTab, setActiveTab, onLogout, onSwapProf
                 />
               )}
             </div>
+
+            {isLocalFallbackMode && (
+              <span className="text-[10px] bg-amber-500/10 border border-amber-500/20 text-amber-600 px-2.5 py-1 rounded-full font-bold flex items-center gap-1 shadow-sm select-none" title="Conexão com Firestore indisponível. O portal está operando em modo offline Sandbox com dados 100% seguros!">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
+                Modo Offline
+              </span>
+            )}
 
             <span className="text-[10px] bg-[#0A192F] text-[#D4AF37] px-2.5 py-1 rounded-full font-extrabold uppercase tracking-wide flex items-center gap-1.5 shadow-sm border border-[#D4AF37]/20 select-none">
               <Sparkles className="w-3 h-3 text-[#D4AF37]" /> Central Operacional ILG

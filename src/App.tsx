@@ -36,9 +36,20 @@ const WorkspaceCriativoModule = React.lazy(() => import('./components/WorkspaceC
 const ComunicacaoInternaModule = React.lazy(() => import('./components/ComunicacaoInterna/ComunicacaoInternaModule').then(m => ({ default: m.ComunicacaoInternaModule })));
 const AgenteSocialSellerModule = React.lazy(() => import('./components/AgenteSocialSeller/AgenteSocialSellerModule').then(m => ({ default: m.AgenteSocialSellerModule })));
 
+// Lista de e-mails autorizados para o sistema interno restrito
+const ALLOWED_EMAILS = [
+  'ericocavalheiro.psico@gmail.com', // Admin / Desenvolvedor
+  // Adicione os e-mails das colaboradoras abaixo (Liana, Ana, Fabi, Nuria, Luiza, etc.)
+  'liana@institutolianagomes.com.br',
+  'luiza@institutolianagomes.com.br',
+  'nuria@institutolianagomes.com.br',
+  'ana@institutolianagomes.com.br',
+  'fabi@institutolianagomes.com.br',
+];
+
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return localStorage.getItem('ilg_demo_authenticated') === 'true';
+    return false; // Force real authentication
   });
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'meu_painel' | 'pessoas' | 'comercial' | 'alunos' | 'tarefas_suporte' | 'materials' | 'importar' | 'espacos' | 'financeiro' | 'whatsapp' | 'planilhas' | 'certificados' | 'salas_reuniao' | 'workspace_criativo' | 'comunicacao_interna' | 'agente_social_seller' | 'prioridades_hoje' | 'busca_global' | any>('meu_painel');
@@ -52,11 +63,18 @@ export default function App() {
       setSelectedProfile(savedProfile);
     }
 
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        setIsAuthenticated(true);
-      } else if (localStorage.getItem('ilg_demo_authenticated') === 'true') {
-        setIsAuthenticated(true);
+        // Validação de acesso restrito por e-mail
+        const userEmail = user.email?.toLowerCase();
+        // Permite dominio geral do instituto ou a lista específica
+        if (userEmail && (ALLOWED_EMAILS.includes(userEmail) || userEmail.endsWith('@institutolianagomes.com.br'))) {
+           setIsAuthenticated(true);
+        } else {
+           alert('Acesso Negado: Seu e-mail não possui permissão para acessar a Central Operacional ILG.');
+           await logout();
+           setIsAuthenticated(false);
+        }
       } else {
         setIsAuthenticated(false);
       }
@@ -97,14 +115,8 @@ export default function App() {
     await loginWithGoogle();
   };
 
-  const handleDemoLogin = () => {
-    localStorage.setItem('ilg_demo_authenticated', 'true');
-    setIsAuthenticated(true);
-  };
-
   const handleLogout = async () => {
     localStorage.removeItem('ilg_selected_profile');
-    localStorage.removeItem('ilg_demo_authenticated');
     localStorage.removeItem('ilg_store_fallback_data');
     setSelectedProfile(null);
     setIsAuthenticated(false);
@@ -122,7 +134,7 @@ export default function App() {
   }
 
   if (!isAuthenticated) {
-    return <Login onLogin={handleLogin} onDemoLogin={handleDemoLogin} />;
+    return <Login onLogin={handleLogin} />;
   }
 
   return (
@@ -137,7 +149,7 @@ export default function App() {
               <p className="text-slate-500 text-sm font-semibold tracking-wide">Carregando Módulo...</p>
             </div>
           }>
-            {activeTab === 'dashboard' && <Dashboard />}
+            {activeTab === 'dashboard' && <Dashboard selectedProfile={selectedProfile} />}
             {activeTab === 'meu_painel' && <MeuPainel setActiveTab={setActiveTab} />}
             {activeTab === 'espacos' && <EspacosModule />}
             {activeTab === 'pessoas' && <PessoasModule />}

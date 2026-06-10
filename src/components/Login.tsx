@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useStore } from '../store';
 
-export function Login({ onLogin, onDemoLogin }: { onLogin: () => void; onDemoLogin: () => void }) {
+export function Login({ onLogin }: { onLogin: () => void }) {
   return (
     <div className="min-h-screen bg-slate-900 bg-gradient-to-br from-[#0A192F] to-[#122c54] flex flex-col items-center justify-center p-4 relative overflow-hidden">
       <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none"></div>
@@ -40,22 +40,8 @@ export function Login({ onLogin, onDemoLogin }: { onLogin: () => void; onDemoLog
           Autenticar com Google
         </button>
 
-        <div className="relative my-6 flex items-center justify-center">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-slate-200"></div>
-          </div>
-          <span className="relative bg-white px-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">OU</span>
-        </div>
-
-        <button 
-          onClick={onDemoLogin} 
-          className="w-full text-slate-700 hover:text-slate-950 border border-slate-300 hover:bg-slate-50 font-black text-xs py-3 px-4 rounded-xl transition-all shadow-xs flex items-center justify-center gap-2 active:scale-[0.98]"
-        >
-          ⚡ Acessar em Modo de Demonstração
-        </button>
-        
         <p className="text-[10px] text-slate-400 mt-6 leading-relaxed select-none">
-          Use o modo de demonstração para acessar instantaneamente com perfis de teste e simulador de banco de dados offline.
+          Acesso restrito. Apenas contas autorizadas do Instituto Liana Gomes podem acessar a Central Operacional.
         </p>
       </div>
     </div>
