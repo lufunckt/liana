@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 export const app = initializeApp(firebaseConfig);
@@ -16,6 +17,7 @@ export const db = initializeFirestore(app, {
 
 export const auth = getAuth();
 export const googleProvider = new GoogleAuthProvider();
+export const storage = getStorage(app);
 
 export const loginWithGoogle = async () => {
   try {

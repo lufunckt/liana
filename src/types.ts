@@ -23,4 +23,5 @@ export interface AppData {
   perfis: any[];
   certificados_emitidos?: any[];
   certificados_templates?: any[];
+  tags_personalizaveis?: any[];
 }

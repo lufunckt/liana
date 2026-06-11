@@ -4,15 +4,17 @@
  */
 
 import React, { useState, useEffect, Suspense } from 'react';
-import { Login, ProfileSelector } from './components/Login';
+import { Login } from './components/Login';
 import { Layout } from './components/Layout';
 import { PessoaFicha } from './components/Pessoas/PessoaFicha';
 import { ToastContainer } from './components/ToastContainer';
+import { ChatWidget } from './components/ChatWidget';
 import { seedDatabase } from './data/seed_firebase';
 import { AppData } from './types';
 import { ALL_SCHEMAS } from './data/schemas';
-import { auth, loginWithGoogle, logout } from './lib/firebase';
+import { auth, db, loginWithGoogle, logout } from './lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { FirebaseProvider } from './lib/FirebaseProvider';
 
 // Lazy load modules as requested (Named outputs correctly modeled)
@@ -65,20 +67,45 @@ export default function App() {
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // Validação de acesso restrito por e-mail
-        const userEmail = user.email?.toLowerCase();
-        // Permite dominio geral do instituto ou a lista específica
-        if (userEmail && (ALLOWED_EMAILS.includes(userEmail) || userEmail.endsWith('@institutolianagomes.com.br'))) {
+         // Validação de acesso restrito
+         const userEmail = user.email?.toLowerCase();
+         if (userEmail && (ALLOWED_EMAILS.includes(userEmail) || userEmail.endsWith('@institutolianagomes.com.br'))) {
            setIsAuthenticated(true);
-        } else {
+           try {
+             // Let it spin while we fetch
+             setLoading(true);
+             const perfisRef = collection(db, 'perfis');
+             const q = query(perfisRef, where('email', '==', userEmail));
+             const querySnapshot = await getDocs(q);
+             
+             if (!querySnapshot.empty) {
+               // Assuming email maps to exactly one profile
+               const profileDoc = querySnapshot.docs[0];
+               const profileId = profileDoc.id;
+               setSelectedProfile(profileId);
+               localStorage.setItem('ilg_selected_profile', profileId);
+             } else {
+               // If there's no profile yet, but auth is allowed, assign a default layout ID based on email prefix
+               // or assign a 'nova_colaboradora' default profile.
+               const baseId = userEmail.split('@')[0];
+               setSelectedProfile(baseId); 
+               localStorage.setItem('ilg_selected_profile', baseId);
+             }
+           } catch (error) {
+             console.error("Error fetching user profile", error);
+           } finally {
+             setLoading(false);
+           }
+         } else {
            alert('Acesso Negado: Seu e-mail não possui permissão para acessar a Central Operacional ILG.');
            await logout();
            setIsAuthenticated(false);
-        }
+           setLoading(false);
+         }
       } else {
-        setIsAuthenticated(false);
+         setIsAuthenticated(false);
+         setLoading(false);
       }
-      setLoading(false);
     });
     return () => unsubscribe();
   }, []);
@@ -140,7 +167,10 @@ export default function App() {
   return (
     <FirebaseProvider>
       {!selectedProfile ? (
-        <ProfileSelector onSelectProfile={handleSelectProfile} />
+        <div className="h-screen bg-[#0A192F] flex flex-col items-center justify-center text-white space-y-4">
+          <div className="w-10 h-10 border-4 border-slate-700 border-t-[#D4AF37] rounded-full animate-spin"></div>
+          <p className="text-slate-400 text-sm font-semibold tracking-wide">Incializando sessão da colaboradora...</p>
+        </div>
       ) : (
         <Layout activeTab={activeTab} setActiveTab={setActiveTab} onLogout={handleLogout} onSwapProfile={handleSwapProfile} selectedProfile={selectedProfile}>
           <Suspense fallback={
@@ -178,6 +208,8 @@ export default function App() {
           onClose={() => setFichaPessoa(null)} 
         />
       )}
+
+      {selectedProfile && <ChatWidget />}
 
       {/* Global Non-blocking Toast notification system */}
       <ToastContainer />

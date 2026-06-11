@@ -31,21 +31,6 @@ interface FirestoreErrorInfo {
 
 function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const errMessage = error instanceof Error ? error.message : String(error);
-  
-  // Auto-fallback for permissions error to behave as solid demo
-  if (
-    errMessage.toLowerCase().includes("permission") || 
-    errMessage.toLowerCase().includes("insufficient") || 
-    errMessage.toLowerCase().includes("unauthenticated")
-  ) {
-    console.warn(`⚠️ Firestore Permission Error caught on path '${path}'. Switching instantly to fully functional local client sandbox mode.`);
-    if (!isLocalFallbackMode) {
-      isLocalFallbackMode = true;
-      loadLocalState();
-      notify();
-    }
-    return;
-  }
 
   const errInfo: FirestoreErrorInfo = {
     error: errMessage,
@@ -230,6 +215,14 @@ export const loadLocalState = () => {
     }
   ];
 
+  const defaultTags = [
+    { id: 'tag-imp', nome: 'Importante', cor: '#EF4444' },
+    { id: 'tag-vip', nome: 'VIP', cor: '#D4AF37' },
+    { id: 'tag-urg', nome: 'Urgente', cor: '#EC4899' },
+    { id: 'tag-hot', nome: 'Quente', cor: '#F59E0B' },
+    { id: 'tag-new', nome: 'Novo', cor: '#3B82F6' },
+  ];
+
   memData = {
     pessoas: pList,
     turmas: [],
@@ -238,7 +231,8 @@ export const loadLocalState = () => {
     pagamentos: pagList,
     perfis: perfList,
     certificados_emitidos: emitList,
-    certificados_templates: tplList
+    certificados_templates: tplList,
+    tags_personalizaveis: defaultTags
   };
 };
 
@@ -261,7 +255,8 @@ const loadInitialCachedState = (): AppData => {
     pagamentos: [],
     perfis: [],
     certificados_emitidos: [],
-    certificados_templates: []
+    certificados_templates: [],
+    tags_personalizaveis: []
   };
 
   try {
@@ -288,7 +283,8 @@ const collections = [
   'pagamentos',
   'perfis',
   'certificados_emitidos',
-  'certificados_templates'
+  'certificados_templates',
+  'tags_personalizaveis'
 ] as const;
 
 let memData: AppData = loadInitialCachedState();
@@ -328,13 +324,7 @@ export const startFirebaseListeners = () => {
       persistOfflineCache();
       notify();
     }, (error) => {
-      console.warn(`Erro de sincronização Firebase para '${col}'. Ativando fallback local para visualização offline robusta:`, error.message || error);
-      if (!isLocalFallbackMode) {
-        // Switch gracefully to local mode
-        isLocalFallbackMode = true;
-        loadLocalState();
-        notify();
-      }
+      console.warn(`Erro de sincronização Firebase para '${col}':`, error.message || error);
     });
   });
 };
@@ -352,11 +342,7 @@ export const syncNow = async () => {
       querySnapshot.forEach(d => dbData.push({ id: d.id, ...d.data() }));
       memData = { ...memData, [col]: dbData };
     } catch (error: any) {
-      console.warn(`Erro ao carregar '${col}' do Firebase. Utilizando cache e habilitando fallback local:`, error.message || error);
-      if (!isLocalFallbackMode) {
-        isLocalFallbackMode = true;
-        loadLocalState();
-      }
+      console.warn(`Erro ao carregar '${col}' do Firebase:`, error.message || error);
     }
   });
   await Promise.all(promises);

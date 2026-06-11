@@ -5,10 +5,12 @@ import {
   Send, User, AlertTriangle, Lightbulb, Check, Plus, Loader2,
   TrendingUp, Activity, BadgeAlert, Shield, Users, CreditCard,
   DollarSign, Mail, Phone, ExternalLink, HelpCircle, CheckCircle, FileText,
-  UserCheck, Award
+  UserCheck, Award, Settings
 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { cn, getTodayString, normalizeStatusSlug, normalizeOnboardingSlug } from '../lib/utils';
 import { PessoaFicha } from './Pessoas/PessoaFicha';
+import { MeuPerfilModal } from './MeuPerfilModal';
 
 interface MeuPainelProps {
   setActiveTab: (tab: any) => void;
@@ -22,6 +24,7 @@ export function MeuPainel({ setActiveTab }: MeuPainelProps) {
 
   // State for Modal PessoaFicha
   const [selectedPessoa, setSelectedPessoa] = useState<any | null>(null);
+  const [showConfigModal, setShowConfigModal] = useState(false);
   
   // Data lists
   const pessoas = data.pessoas || [];
@@ -31,23 +34,31 @@ export function MeuPainel({ setActiveTab }: MeuPainelProps) {
 
   const todayStr = getTodayString(); // Dynamic system date using central function
 
-  const getProfileName = (id: string) => {
+  const perfis = data.perfis || [];
+
+  const getProfileName = (id: string | null) => {
+    if (!id) return 'Visitante';
+    const profileDoc = perfis.find((p: any) => p.id === id);
+    if (profileDoc && profileDoc.nome) return profileDoc.nome;
     switch(id) {
       case 'liana': return 'Liana Gomes';
       case 'ana': return 'Ana (Comercial)';
       case 'nuria': return 'Núria (Onboarding & CS)';
       case 'luiza': return 'Luiza (Regras e DevOps)';
-      default: return 'Colaboradora';
+      default: return id;
     }
   };
 
-  const getProfileRole = (id: string) => {
+  const getProfileRole = (id: string | null) => {
+    if (!id) return 'Convite Pendente';
+    const profileDoc = perfis.find((p: any) => p.id === id);
+    if (profileDoc && profileDoc.cargo) return profileDoc.cargo;
     switch(id) {
       case 'liana': return 'Fundadora & Diretora Geral';
       case 'ana': return 'Head de Negócios & Comercial';
       case 'nuria': return 'Onboarding, Mídias & CS';
       case 'luiza': return 'Tech Lead / Administradora';
-      default: return 'Membro da Equipe';
+      default: return 'Colaboradora Associada';
     }
   };
 
@@ -334,6 +345,53 @@ export function MeuPainel({ setActiveTab }: MeuPainelProps) {
               )}
             </div>
           </div>
+          {/* Secret Analytics for Liana Only */}
+          {selectedProfile === 'liana' && (
+            <div className="bg-slate-900 rounded-xl border border-slate-800 p-5 space-y-4">
+              <h3 className="font-extrabold text-[#D4AF37] text-sm tracking-tight flex items-center justify-between">
+                <span className="flex items-center gap-2"><Activity className="w-4 h-4 text-[#D4AF37]" /> Monitoramento Global (Supervisão)</span>
+                <span className="text-[10px] bg-[#D4AF37]/20 text-[#D4AF37] border border-[#D4AF37]/30 font-bold px-2 py-0.5 rounded tracking-wider uppercase">Confidencial</span>
+              </h3>
+
+              <div className="space-y-4 max-h-[350px] overflow-y-auto pr-2">
+                <div className="bg-white/5 border border-white/10 rounded-lg p-3">
+                  <p className="text-xs text-slate-400 font-bold uppercase mb-2">Comercial & CRM (Ana)</p>
+                  <div className="flex items-center justify-between text-white text-xs">
+                    <span>Leads Quentes gerados:</span>
+                    <strong className="text-orange-400 font-mono">{pessoas.filter(p => (p.tipoPessoa === 'lead') && p.temperatura === 'quente').length}</strong>
+                  </div>
+                  <div className="flex items-center justify-between text-white text-xs mt-1">
+                    <span>Negociações ativas na fila:</span>
+                    <strong className="text-emerald-400 font-mono">{pessoas.filter(p => normalizeStatusSlug(p.status) === 'em-negociacao').length}</strong>
+                  </div>
+                </div>
+
+                <div className="bg-white/5 border border-white/10 rounded-lg p-3">
+                  <p className="text-xs text-slate-400 font-bold uppercase mb-2">Diretoria & Financeiro (Liana)</p>
+                  <div className="flex items-center justify-between text-white text-xs">
+                    <span>Vendas convertidas / Pagos:</span>
+                    <strong className="text-emerald-400 font-mono">{pagamentos.filter(p => p.status === 'pago').length} acordos</strong>
+                  </div>
+                  <div className="flex items-center justify-between text-white text-xs mt-1">
+                    <span>Atrasos identificados:</span>
+                    <strong className="text-rose-400 font-mono">{pagamentos.filter(p => p.status === 'atrasado').length} alertas</strong>
+                  </div>
+                </div>
+
+                <div className="bg-white/5 border border-white/10 rounded-lg p-3">
+                  <p className="text-xs text-slate-400 font-bold uppercase mb-2">Atividades e Tarefas (Geral)</p>
+                  <div className="flex items-center justify-between text-white text-xs">
+                    <span>Tarefas Ociosas / Atrasadas:</span>
+                    <strong className="text-amber-400 font-mono">{tarefas.filter(t => t.status !== 'concluído').length} ativas</strong>
+                  </div>
+                   <div className="flex items-center justify-between text-white text-xs mt-1">
+                    <span>Materiais didáticos gerados:</span>
+                    <strong className="text-indigo-400 font-mono">{materiais.length} docs</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Action Panel */}
@@ -401,6 +459,16 @@ export function MeuPainel({ setActiveTab }: MeuPainelProps) {
       .sort((a,b) => b[1] - a[1])
       .slice(0, 3);
 
+    const collabsData = perfis.map((pf: any) => {
+      const pTasks = tarefas.filter(t => t.responsavel === pf.nome || t.responsavel === pf.id).length;
+      const pContacts = pessoas.filter(p => p.responsavel === pf.nome || p.responsavel === pf.id).length;
+      return {
+        name: pf.nome || pf.id,
+        tarefas: pTasks,
+        contatos: pContacts
+      };
+    }).filter(c => c.tarefas > 0 || c.contatos > 0);
+
     return (
       <div className="space-y-6">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -420,6 +488,23 @@ export function MeuPainel({ setActiveTab }: MeuPainelProps) {
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Gargalos e Prioridades</p>
             <p className="text-2xl font-black text-red-500 mt-1.5">{suportesCriticos.length + tasksAwaiting.length}</p>
           </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+            <h3 className="font-extrabold text-[#0A192F] text-sm tracking-tight">Desempenho da Equipe: Tarefas & Contatos</h3>
+            <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={collabsData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" fontSize={11} />
+                        <YAxis fontSize={11} />
+                        <Tooltip contentStyle={{fontSize: '11px'}} />
+                        <Legend wrapperStyle={{fontSize: '11px'}} />
+                        <Bar dataKey="tarefas" fill="#6366f1" name="Tarefas" />
+                        <Bar dataKey="contatos" fill="#10b981" name="Contatos" />
+                    </BarChart>
+                </ResponsiveContainer>
+            </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -692,11 +777,18 @@ export function MeuPainel({ setActiveTab }: MeuPainelProps) {
             <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider leading-none">Status Autenticado</p>
             <p className="text-xs font-black text-amber-400 mt-1">{getProfileRole(selectedProfile)}</p>
           </div>
+          <button 
+            onClick={() => setShowConfigModal(true)}
+            className="p-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-slate-300 hover:text-white transition"
+            title="Editar Meu Perfil"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
         </div>
       </div>
 
       {/* Render Dynamic Dashboard based on Profile */}
-      {selectedProfile === 'ana' && renderAnaDashboard()}
+      {(selectedProfile === 'ana' || (!['nuria', 'liana', 'luiza', 'ana'].includes(selectedProfile || ''))) && renderAnaDashboard()}
       {selectedProfile === 'nuria' && renderNuriaDashboard()}
       {selectedProfile === 'liana' && renderLianaDashboard()}
       {selectedProfile === 'luiza' && renderLuizaDashboard()}
@@ -779,6 +871,13 @@ export function MeuPainel({ setActiveTab }: MeuPainelProps) {
               window.dispatchEvent(new CustomEvent('certificados_updated'));
             }, 100);
           }} 
+        />
+      )}
+
+      {showConfigModal && (
+        <MeuPerfilModal 
+          userId={selectedProfile} 
+          onClose={() => setShowConfigModal(false)}
         />
       )}
     </div>

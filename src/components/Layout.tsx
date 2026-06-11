@@ -125,14 +125,26 @@ export function Layout({ children, activeTab, setActiveTab, onLogout, onSwapProf
     return (saved as any) || 'todos';
   });
 
+  const perfis = data.perfis || [];
+  
   const getProfileName = (id: string | null | undefined) => {
+    if (!id) return 'Usuário';
+    const profileDoc = perfis.find((p: any) => p.id === id);
+    if (profileDoc && profileDoc.nome) return profileDoc.nome.split(' ')[0]; // first name
     switch(id) {
       case 'liana': return 'Liana Gomes';
       case 'luiza': return 'Luiza';
       case 'nuria': return 'Nuria';
       case 'ana': return 'Ana';
-      default: return 'Usuário';
+      default: return id;
     }
+  };
+
+  const getProfilePhoto = (id: string | null | undefined) => {
+    if (!id) return null;
+    const profileDoc = perfis.find((p: any) => p.id === id);
+    if (profileDoc && profileDoc.foto) return profileDoc.foto;
+    return null;
   };
 
   const handleSync = async () => {
@@ -282,8 +294,12 @@ export function Layout({ children, activeTab, setActiveTab, onLogout, onSwapProf
       <div className="p-4 space-y-3 border-b border-slate-800/80">
         {selectedProfile && (
           <div className="bg-slate-800/40 border border-slate-700/30 rounded-xl p-2.5 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#D4AF37] to-indigo-900 text-white flex items-center justify-center font-black text-xs shadow-md">
-              {getProfileName(selectedProfile).charAt(0)}
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#D4AF37] to-indigo-900 text-white flex items-center justify-center font-black text-xs shadow-md overflow-hidden shrink-0">
+              {getProfilePhoto(selectedProfile) ? (
+                <img src={getProfilePhoto(selectedProfile)!} alt="Profile" className="w-full h-full object-cover" />
+              ) : (
+                getProfileName(selectedProfile).charAt(0)
+              )}
             </div>
             <div className="min-w-0">
               <p className="text-[10px] font-bold text-slate-400 leading-none">Acesso</p>

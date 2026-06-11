@@ -8,6 +8,7 @@ import {
 import { useStore } from '../../store';
 import { cn, showToast, normalizeStatusSlug, normalizeOnboardingSlug, getStatusLabel, getOnboardingLabel } from '../../lib/utils';
 import { usePermissions } from '../../lib/permissions';
+import { TagManagerModal } from '../TagManagerModal';
 
 const COMPANY_PIX_CNPJ = '51.533.488/0001-09';
 
@@ -82,6 +83,32 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
 
   // Onboarding Checklist Guided dialog state
   const [showOnboardingGuideModal, setShowOnboardingGuideModal] = useState(false);
+
+  // New interaction input states
+  const [interactDate, setInteractDate] = useState(new Date().toISOString().split('T')[0]);
+  const [interactType, setInteractType] = useState('telefone');
+  const [interactResp, setInteractResp] = useState(pessoa.responsavel || 'Ana');
+  const [interactResumo, setInteractResumo] = useState('');
+  const [showTagManager, setShowTagManager] = useState(false);
+
+  const tagsList = data.tags_personalizaveis || [];
+
+  const handleRegisterInteraction = () => {
+    if (!interactResumo.trim()) {
+      showToast('Por favor, informe o resumo da interação.', 'error');
+      return;
+    }
+    const newEntry = {
+      text: `[${interactType.toUpperCase()}] ${interactResumo.trim()}`,
+      date: interactDate,
+      type: interactType,
+      responsavel: interactResp,
+      resumo: interactResumo.trim()
+    };
+    setInteracoes([newEntry, ...interacoes]);
+    setInteractResumo('');
+    showToast('Ação registrada na timeline local! Lembre-se de clicar em "Salvar Alterações" no rodapé para sincronizar definitivo.', 'info');
+  };
 
   // Read certificates dynamically from real-time database streamed state
   const studentCertificates = React.useMemo(() => {
@@ -457,25 +484,84 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
                 </div>
 
                 {/* TAGS */}
-                <div className="space-y-2 pt-1">
-                  <label className="text-xs font-black text-slate-500 uppercase block">Tags Cadastrais</label>
-                  <div className="flex flex-wrap gap-1">
-                    {tags.map(t => (
-                      <span key={t} className="p-1 px-2.5 bg-[#0A192F]/5 border border-slate-200 text-slate-700 font-bold rounded-lg text-[10px] flex items-center gap-1">
-                        {t}
-                        <button type="button" onClick={() => handleRemoveTag(t)} className="text-red-500 hover:text-red-700 font-black">×</button>
-                      </span>
-                    ))}
+                <div className="space-y-3 pt-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-black text-slate-700 uppercase block">Tags Personalizáveis</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowTagManager(true)}
+                      className="text-[10px] font-bold text-[#1D4E89] hover:underline flex items-center gap-1"
+                    >
+                      ⚙️ Gerenciar Tags
+                    </button>
                   </div>
-                  <div className="flex gap-2">
-                    <input 
-                      type="text" 
-                      placeholder="Criar nova tag" 
-                      value={novaTag} 
-                      onChange={(e) => setNovaTag(e.target.value)}
-                      className="text-xs border text-slate-800 px-3 py-1.5 rounded-lg focus:outline-none" 
-                    />
-                    <button type="button" onClick={handleAddTag} className="p-1 px-3 bg-slate-200 text-slate-700 font-bold rounded-lg text-xs">Adicionar</button>
+                  
+                  {/* Active tags on the lead/student */}
+                  <div className="flex flex-wrap gap-1">
+                    {tags.map(t => {
+                      const found = tagsList.find((g: any) => g.nome.toLowerCase() === t.toLowerCase() || g.id === t);
+                      const tagCor = found ? found.cor : '#64748B';
+                      const tagNome = found ? found.nome : t;
+
+                      return (
+                        <span 
+                          key={t} 
+                          style={{ backgroundColor: tagCor }}
+                          className="px-2.5 py-0.5 text-[10px] font-black uppercase rounded text-white flex items-center gap-1.5 shadow-sm"
+                        >
+                          {tagNome}
+                          <button 
+                            type="button" 
+                            onClick={() => handleRemoveTag(t)} 
+                            className="bg-white/20 hover:bg-white/45 text-white font-black w-3.5 h-3.5 rounded-full flex items-center justify-center text-[10px] leading-none transition-colors"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      );
+                    })}
+                    {tags.length === 0 && (
+                      <span className="text-xs text-slate-400 italic">Nenhuma tag associada.</span>
+                    )}
+                  </div>
+
+                  {/* Quick select tags list from global configuration pool */}
+                  <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-150">
+                    <p className="text-[9px] font-black uppercase text-slate-400 mb-1.5">Clique para Associar/Dissociar Tag:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {tagsList.map((tag: any) => {
+                        const isAssociated = tags.some(t => t.toLowerCase() === tag.nome.toLowerCase() || t === tag.id);
+                        
+                        return (
+                          <button
+                            type="button"
+                            key={tag.id}
+                            onClick={() => {
+                              if (isAssociated) {
+                                handleRemoveTag(tag.nome);
+                              } else {
+                                setTags([...tags, tag.nome]);
+                              }
+                            }}
+                            style={{ 
+                              backgroundColor: isAssociated ? tag.cor : 'transparent',
+                              borderColor: tag.cor,
+                              color: isAssociated ? '#FFFFFF' : tag.cor
+                            }}
+                            className={cn(
+                              "px-2 py-0.5 text-[9px] uppercase font-bold border rounded transition-all text-left flex items-center gap-1",
+                              isAssociated ? 'shadow-xs border-transparent' : 'opacity-70 hover:opacity-100 hover:bg-slate-150'
+                            )}
+                          >
+                            {isAssociated && <Check className="w-2.5 h-2.5 shrink-0" />}
+                            {tag.nome}
+                          </button>
+                        );
+                      })}
+                      {tagsList.length === 0 && (
+                        <p className="text-[10px] text-slate-400 italic">Crie ou gerencie tags pelo botão acima.</p>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -764,16 +850,119 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
             {/* TABS 7: HISTÓRICO TIMELINE */}
             {activeSubTab === 'historico' && (
               <div className="space-y-4">
-                <h3 className="text-sm font-black text-[#0A192F] uppercase border-b pb-2 tracking-tight">Timeline Histórica de Eventos</h3>
-                
-                <div className="space-y-3 max-h-[240px] overflow-y-auto pr-1">
-                  {interacoes.map((item, id) => (
-                    <div key={id} className="pl-4 border-l-2 border-slate-205 py-0.5 relative">
-                      <div className="absolute w-2 h-2 rounded-full -left-[5px] top-1.5 transition-colors bg-[#0A192F]" />
-                      <p className="text-xs text-slate-755 font-semibold">{item.text}</p>
-                      <span className="text-[10px] font-medium text-slate-400 block mt-1">{item.date}</span>
+                <div className="flex items-center justify-between border-b pb-2">
+                  <h3 className="text-sm font-black text-[#0A192F] uppercase tracking-tight">Timeline & Histórico Detalhado</h3>
+                  <span className="text-[10px] font-bold text-slate-550 bg-slate-100 px-2 py-0.5 rounded-full">{interacoes.length} Entrada(s)</span>
+                </div>
+
+                {/* LOG NEW INTERACTION FORM */}
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-150 space-y-3 text-slate-700">
+                  <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                    📝 Registrar Nova Interação
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-[9px] font-black text-slate-400 block mb-1 uppercase">Data do Contato</label>
+                      <input 
+                        type="date" 
+                        value={interactDate}
+                        onChange={e => setInteractDate(e.target.value)}
+                        className="w-full text-xs border border-slate-305 rounded px-2 py-1 bg-white"
+                      />
                     </div>
-                  ))}
+                    <div>
+                      <label className="text-[9px] font-black text-slate-400 block mb-1 uppercase">Canal / Meio</label>
+                      <select
+                        value={interactType}
+                        onChange={e => setInteractType(e.target.value)}
+                        className="w-full text-xs border border-slate-305 bg-white rounded px-2 py-1 outline-none"
+                      >
+                        <option value="telefone">📞 Telefone</option>
+                        <option value="e-mail">📧 E-mail</option>
+                        <option value="reunião">👥 Reunião</option>
+                        <option value="whatsapp">💬 WhatsApp</option>
+                        <option value="outro">⚙️ Outro</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black text-slate-400 block mb-1 uppercase">Responsável</label>
+                      <input 
+                        type="text" 
+                        value={interactResp}
+                        onChange={e => setInteractResp(e.target.value)}
+                        placeholder="Ex: Liana"
+                        className="w-full text-xs border border-slate-305 rounded px-2 py-1 bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[9px] font-black text-slate-400 block mb-1 uppercase">Resumo da Conversa / Ação Realizada</label>
+                    <textarea 
+                      rows={2}
+                      value={interactResumo}
+                      onChange={e => setInteractResumo(e.target.value)}
+                      placeholder="Descreva brevemente o que foi conversado ou acordado..."
+                      className="w-full text-xs border border-slate-305 rounded px-2 py-1.5 outline-none focus:ring-1 focus:ring-[#0A192F] bg-white text-slate-800"
+                    />
+                  </div>
+
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handleRegisterInteraction}
+                      className="p-1 px-3 bg-[#0A192F] text-white hover:bg-[#D4AF37] hover:text-[#0A192F] rounded text-xs font-bold transition-colors"
+                    >
+                      Registrar Interação
+                    </button>
+                  </div>
+                </div>
+
+                {/* CHRONOLOGICAL INTERACTION VIEWER (REVERSE CHRONOLOGICAL ORDER) */}
+                <div className="space-y-3.5 max-h-[280px] overflow-y-auto pr-1">
+                  {[...interacoes]
+                    .sort((a, b) => {
+                      const dA = a.date || '';
+                      const dB = b.date || '';
+                      return dB.localeCompare(dA);
+                    })
+                    .map((item, id) => {
+                      const typeLower = String(item.type || '').toLowerCase();
+                      let typeColor = 'bg-slate-100 text-slate-700';
+                      if (typeLower.includes('tel')) typeColor = 'bg-blue-50 text-blue-750 border-blue-200';
+                      else if (typeLower.includes('mail')) typeColor = 'bg-purple-50 text-purple-750 border-purple-200';
+                      else if (typeLower.includes('reun')) typeColor = 'bg-amber-50 text-amber-750 border-amber-200';
+                      else if (typeLower.includes('whats') || typeLower.includes('chat')) typeColor = 'bg-emerald-50 text-emerald-750 border-emerald-250';
+
+                      return (
+                        <div key={id} className="p-3 bg-white border border-slate-150 rounded-xl relative hover:shadow-xs transition space-y-2">
+                          <div className="flex flex-wrap items-center justify-between gap-1.5">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border ${typeColor}`}>
+                                {item.type || 'Interação'}
+                              </span>
+                              <span className="text-[10px] font-extrabold text-slate-700 uppercase">
+                                Por: {item.responsavel || 'Equipe'}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-bold text-slate-400 font-mono">📅 {item.date}</span>
+                          </div>
+
+                          {item.resumo ? (
+                            <p className="text-xs text-slate-600 leading-relaxed font-semibold bg-slate-50/50 p-2.5 rounded-lg border border-slate-100">{item.resumo}</p>
+                          ) : (
+                            <p className="text-xs text-slate-655 leading-relaxed font-semibold">{item.text}</p>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                  {interacoes.length === 0 && (
+                    <div className="text-center py-6 text-xs text-slate-400 italic">
+                      Nenhuma interação registrada no histórico.
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1005,6 +1194,10 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
             </div>
           </div>
         </div>
+      )}
+
+      {showTagManager && (
+        <TagManagerModal onClose={() => setShowTagManager(false)} />
       )}
 
     </div>

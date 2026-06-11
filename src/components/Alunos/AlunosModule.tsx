@@ -8,11 +8,15 @@ export function AlunosModule() {
   const alunos = (data.pessoas || []).filter(p => p.tipoPessoa === 'aluna' || p.produtoComprado);
   
   const [search, setSearch] = useState('');
+  const [tagFilter, setTagFilter] = useState('');
   const [selectedPessoa, setSelectedPessoa] = useState<any>(null);
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
 
+  const tagsList = data.tags_personalizaveis || [];
+
   const filtered = alunos.filter(a => {
     if (search && !a.nome?.toLowerCase().includes(search.toLowerCase())) return false;
+    if (tagFilter && (!a.tags || !Array.isArray(a.tags) || !a.tags.some((t: string) => t.toLowerCase() === tagFilter.toLowerCase()))) return false;
     return true;
   });
 
@@ -32,15 +36,27 @@ export function AlunosModule() {
       </div>
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-        <div className="relative max-w-xs flex-1">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Buscar aluno..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="pl-10 w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:ring-[#1D4E89] outline-none"
-          />
+        <div className="flex flex-col sm:flex-row gap-3 flex-1 max-w-lg">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Buscar aluno..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="pl-10 w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:ring-[#1D4E89] outline-none"
+            />
+          </div>
+          <select 
+            value={tagFilter} 
+            onChange={e => setTagFilter(e.target.value)} 
+            className="border border-slate-300 rounded-md px-3 py-2 text-sm bg-white outline-none focus:ring-[#1D4E89] min-w-[140px]"
+          >
+            <option value="">Tag (Todas)</option>
+            {tagsList.map((tag: any) => (
+              <option key={tag.id} value={tag.nome}>{tag.nome}</option>
+            ))}
+          </select>
         </div>
 
         <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg self-start sm:self-auto border border-slate-200/50">
@@ -77,6 +93,7 @@ export function AlunosModule() {
                 <tr>
                   <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider">Aluno(a)</th>
                   <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider">Turma / Produto</th>
+                  <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider">Tags</th>
                   <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider">Grupo Whats</th>
                   <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider">Forms Inic.</th>
                   <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider">Nutror</th>
@@ -89,6 +106,21 @@ export function AlunosModule() {
                   <tr key={item.id} onClick={() => setSelectedPessoa(item)} className="hover:bg-slate-50/80 cursor-pointer transition-colors">
                     <td className="px-5 py-4 text-sm text-slate-800 font-bold">{item.nome}</td>
                     <td className="px-5 py-4 text-sm text-slate-500 max-w-[150px] truncate">{item.produtoComprado || item.turma || '-'}</td>
+                    <td className="px-5 py-4 text-sm">
+                      <div className="flex flex-wrap gap-1 max-w-[175px]">
+                        {item.tags && Array.isArray(item.tags) && item.tags.map((t: string) => {
+                          const found = tagsList.find((g: any) => g.nome.toLowerCase() === t.toLowerCase() || g.id === t);
+                          const tagCor = found ? found.cor : '#64748B';
+                          const tagNome = found ? found.nome : t;
+                          return (
+                            <span key={t} style={{ backgroundColor: tagCor }} className="px-1.5 py-0.5 rounded text-[8px] font-black text-white uppercase tracking-wider shadow-2xs">
+                              {tagNome}
+                            </span>
+                          );
+                        })}
+                        {(!item.tags || item.tags.length === 0) && <span className="text-slate-300">-</span>}
+                      </div>
+                    </td>
                     <td className="px-5 py-4 text-sm">{renderStatusCheck(item.entrouGrupo)}</td>
                     <td className="px-5 py-4 text-sm">{renderStatusCheck(item.respondeuInicial)}</td>
                     <td className="px-5 py-4 text-sm">{renderStatusCheck(item.acessoNutror)}</td>
@@ -124,9 +156,23 @@ export function AlunosModule() {
                     <div className="p-2 bg-slate-50 rounded-xl text-slate-600 border border-slate-100 group-hover:bg-[#1D4E89]/5 transition-colors shrink-0">
                       <GraduationCap className="w-5 h-5 text-[#1D4E89]" />
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <h4 className="font-bold text-slate-800 text-sm md:text-base leading-snug group-hover:text-[#1D4E89] transition-colors truncate">{item.nome}</h4>
                       <p className="text-[11px] text-slate-500 font-medium truncate mt-0.5">{item.produtoComprado || item.turma || 'Sem turma registrada'}</p>
+                      
+                      {/* Associated Tags on student's card */}
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {item.tags && Array.isArray(item.tags) && item.tags.map((t: string) => {
+                          const found = tagsList.find((g: any) => g.nome.toLowerCase() === t.toLowerCase() || g.id === t);
+                          const tagCor = found ? found.cor : '#64748B';
+                          const tagNome = found ? found.nome : t;
+                          return (
+                            <span key={t} style={{ backgroundColor: tagCor }} className="px-1.5 py-0.2 rounded text-[8px] font-black text-white uppercase tracking-wider">
+                              {tagNome}
+                            </span>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                   <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#1D4E89]/10 text-[#1D4E89] uppercase tracking-wide shrink-0">

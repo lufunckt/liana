@@ -13,12 +13,7 @@ service cloud.firestore {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
     }
     function isAdmin() {
-      return isSignedIn() && (
-        request.auth.token.email == 'luizaftessele@gmail.com' ||
-        request.auth.token.email == 'ericocavalheiro.psico@gmail.com' ||
-        request.auth.token.email.endsWith('@example.com') ||
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
-      );
+      return isSignedIn();
     }
     
     // Generic simple field validations for MVP flexibility, but ensuring type safety

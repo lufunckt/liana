@@ -11,9 +11,11 @@ export function PessoasModule() {
   
   const [viewMode, setViewMode] = useState<'table'|'cards'>('table');
   const [search, setSearch] = useState('');
-  const [filters, setFilters] = useState({ tipoPessoa: '', status: '', temperatura: '' });
+  const [filters, setFilters] = useState({ tipoPessoa: '', status: '', temperatura: '', tag: '' });
   
   const [selectedPessoa, setSelectedPessoa] = useState<any>(null);
+
+  const tagsList = data.tags_personalizaveis || [];
 
   useEffect(() => {
     const handleFilterChange = (e: Event) => {
@@ -34,6 +36,7 @@ export function PessoasModule() {
       if (filters.tipoPessoa && p.tipoPessoa !== filters.tipoPessoa) return false;
       if (filters.status && normalizeStatusSlug(p.status) !== normalizeStatusSlug(filters.status)) return false;
       if (filters.temperatura && p.temperatura !== filters.temperatura) return false;
+      if (filters.tag && (!p.tags || !Array.isArray(p.tags) || !p.tags.some((t: string) => t.toLowerCase() === filters.tag.toLowerCase()))) return false;
       return true;
     });
   }, [pessoas, search, filters]);
@@ -92,6 +95,13 @@ export function PessoasModule() {
               <option value="perdido">Perdido</option>
             </select>
 
+            <select value={filters.tag} onChange={e => setFilters({...filters, tag: e.target.value})} className="border border-slate-300 rounded-md px-3 py-2 text-sm bg-white outline-none focus:ring-[#1D4E89]">
+              <option value="">Tag (Todas)</option>
+              {tagsList.map((tag: any) => (
+                <option key={tag.id} value={tag.nome}>{tag.nome}</option>
+              ))}
+            </select>
+
             <div className="flex bg-slate-100 p-1 rounded-lg shrink-0">
               <button 
                 onClick={() => setViewMode('table')} 
@@ -117,6 +127,7 @@ export function PessoasModule() {
                   <th className="px-5 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Nome</th>
                   <th className="px-5 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Tipo</th>
                   <th className="px-5 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">WhatsApp</th>
+                  <th className="px-5 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Tags</th>
                   <th className="px-5 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Produto / Turma</th>
                   <th className="px-5 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
                   <th className="px-5 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Temperatura</th>
@@ -148,6 +159,21 @@ export function PessoasModule() {
                         )}
                       </div>
                     </td>
+                    <td className="px-5 py-4 text-xs font-medium text-slate-500">
+                      <div className="flex flex-wrap gap-1 max-w-[170px]">
+                        {item.tags && Array.isArray(item.tags) && item.tags.map((t: string) => {
+                          const found = tagsList.find((g: any) => g.nome.toLowerCase() === t.toLowerCase() || g.id === t);
+                          const tagCor = found ? found.cor : '#64748B';
+                          const tagNome = found ? found.nome : t;
+                          return (
+                            <span key={t} style={{ backgroundColor: tagCor }} className="px-1.5 py-0.5 rounded text-[8px] font-black text-white uppercase tracking-wider shadow-2xs">
+                              {tagNome}
+                            </span>
+                          );
+                        })}
+                        {(!item.tags || item.tags.length === 0) && <span className="text-slate-300">-</span>}
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-sm text-slate-500 truncate max-w-[200px]">{item.produtoInteresse || item.produtoComprado}</td>
                     <td className="px-4 py-3 text-sm">{renderBadge(getStatusLabel(item.status))}</td>
                     <td className="px-4 py-3 text-sm">{renderBadge(item.temperatura)}</td>
@@ -168,9 +194,23 @@ export function PessoasModule() {
                 >
                   <div className="space-y-3">
                     <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <h4 className="font-extrabold text-[#0A192F] text-sm truncate">{item.nome}</h4>
                         <span className="text-[10px] text-slate-400 font-bold block mt-0.5">{item.email || 'Sem e-mail cadastrado'}</span>
+                        
+                        {/* Custom tags in card lists */}
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {item.tags && Array.isArray(item.tags) && item.tags.map((t: string) => {
+                            const found = tagsList.find((g: any) => g.nome.toLowerCase() === t.toLowerCase() || g.id === t);
+                            const tagCor = found ? found.cor : '#64748B';
+                            const tagNome = found ? found.nome : t;
+                            return (
+                              <span key={t} style={{ backgroundColor: tagCor }} className="px-1.5 py-0.2 rounded text-[8px] font-black text-white uppercase tracking-wider">
+                                {tagNome}
+                              </span>
+                            );
+                          })}
+                        </div>
                       </div>
                       <span className="shrink-0">{renderBadge(item.tipoPessoa)}</span>
                     </div>
