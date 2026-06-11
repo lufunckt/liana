@@ -8,7 +8,7 @@ dotenv.config();
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
 
   app.use(express.json());
 
@@ -51,7 +51,7 @@ async function startServer() {
       });
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-1.5-flash",
         contents: `Analise o resumo de reunião, conversas ou anotações fornecido a seguir. Extraia de forma objetiva e profissional as tarefas essenciais e recados/avisos importantes que devem constar no mural corporativo do Instituto Liana Gomes.
 
 Retorne EXCLUSIVAMENTE um objeto JSON válido (sem tags markdown de bloco adicionais ou formatação extra) no seguinte formato exato:
@@ -104,7 +104,7 @@ Texto de entrada:
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  app.listen(Number(PORT), "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);
   });
 }

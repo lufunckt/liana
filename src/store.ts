@@ -52,7 +52,7 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   throw new Error(JSON.stringify(errInfo));
 }
 
-export let isLocalFallbackMode = false;
+export let isLocalFallbackMode = false; // Set to true to bypass Firebase and use local storage only
 
 export const loadLocalState = () => {
   const localSaved = localStorage.getItem('ilg_store_fallback_data');
