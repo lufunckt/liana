@@ -39,7 +39,7 @@ const ComunicacaoInternaModule = React.lazy(() => import('./components/Comunicac
 const AgenteSocialSellerModule = React.lazy(() => import('./components/AgenteSocialSeller/AgenteSocialSellerModule').then(m => ({ default: m.AgenteSocialSellerModule })));
 
 // Lista de e-mails autorizados para o sistema interno restrito
-const ALLOWED_EMAILS = [
+const ALLOWED_EMAILS = [ "luizaftessele@gmail.com",
   'ericocavalheiro.psico@gmail.com', // Admin / Desenvolvedor
   // Adicione os e-mails das colaboradoras abaixo (Liana, Ana, Fabi, Nuria, Luiza, etc.)
   'liana@institutolianagomes.com.br',
