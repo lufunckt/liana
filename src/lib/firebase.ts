@@ -23,7 +23,7 @@ export const loginWithGoogle = async () => {
   try {
     await signInWithPopup(auth, googleProvider);
   } catch (error) {
-    console.error("Erro ao fazer login com Google:", error);
+    console.error("Erro ao fazer login com Google:", error); throw error;
   }
 };
 
