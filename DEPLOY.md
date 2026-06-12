@@ -1,33 +1,38 @@
-# Guia de Publicação Gratuita - Central Operacional ILG
+# Guia de Publicação - Central Operacional ILG
 
-Para manter o sistema 100% funcional sem custos iniciais, recomendamos a seguinte combinação:
+Para manter o sistema 100% funcional, siga estas etapas de configuração.
 
 ## 1. Hospedagem do Sistema (Frontend + Backend)
 **Plataforma: [Render.com](https://render.com/)**
-- **Por que?** Permite rodar o servidor Node.js (Express) gratuitamente.
 - **Como configurar:**
   1. Conecte seu repositório GitHub ao Render.
   2. Crie um novo "Web Service".
-  3. O Render detectará o arquivo `render.yaml` que eu adicionei.
-  4. Configure as Variáveis de Ambiente no painel do Render:
+  3. O Render detectará o arquivo `render.yaml`.
+  4. Nas configurações (Settings), adicione as Variáveis de Ambiente:
      - `GEMINI_API_KEY`: Sua chave da Google AI Studio.
      - `NODE_ENV`: `production`
-- **Nota:** No plano gratuito, o servidor "dorme" após 15 min de inatividade e leva alguns segundos para acordar no primeiro acesso.
+- **URL do seu app:** `https://liana-kd4x.onrender.com/`
 
-## 2. Banco de Dados e Autenticação
-**Plataforma: [Firebase](https://console.firebase.google.com/)**
-- **Plano Spark (Gratuito):** Oferece limites generosos para Firestore (banco) e Authentication (login).
-- O projeto já está configurado para usar o Firebase que você forneceu. Certifique-se de que o **Google Sign-in** está ativado no console do Firebase.
+## 2. Configuração Crítica do Firebase (Para o Login Funcionar)
+**Se o login não passar da tela inicial, é provável que o domínio não esteja autorizado.**
 
-## 3. Inteligência Artificial (IA)
-**Plataforma: [Google AI Studio](https://aistudio.google.com/)**
-- O modelo `gemini-1.5-flash` possui um nível gratuito (Free Tier) com limites de requisições por minuto que são suficientes para uso interno da equipe.
+1. Acesse o [Console do Firebase](https://console.firebase.google.com/).
+2. Selecione seu projeto.
+3. No menu lateral, vá em **Build > Authentication**.
+4. Clique na aba **Settings**.
+5. No menu lateral de Settings, clique em **Authorized domains**.
+6. Clique em **Add domain** e adicione:
+   - `liana-kd4x.onrender.com`
+7. Certifique-se de que o provedor **Google** está ativo em **Sign-in method**.
 
-## Passos para Publicar Agora:
-1. Suba este código para um repositório no GitHub (Privado).
-2. Acesse o Render.com e crie o Web Service apontando para esse repo.
-3. Adicione a `GEMINI_API_KEY` nas configurações.
-4. O sistema estará online no endereço `https://seu-app.onrender.com`.
+## 3. Banco de Dados e IA
+- **Firestore:** O sistema usa o Firestore no plano Spark (Gratuito).
+- **IA:** O modelo `gemini-1.5-flash` é usado para processar reuniões e mensagens. Certifique-se de que a `GEMINI_API_KEY` está configurada no Render.
+
+## Resumo de Problemas Comuns:
+- **"Acesso Negado":** O e-mail usado não está na lista de e-mails permitidos no arquivo `src/App.tsx`.
+- **Botão de Login não faz nada:** Verifique se o bloqueador de pop-ups do navegador está desativado.
+- **Erro de Domínio não autorizado:** Siga o passo 2 acima.
 
 ---
-*Dica: Para o WhatsApp funcionar 100%, você precisará de uma API externa (como Evolution API), que geralmente requer um servidor (VPS). Para uso básico, as funções de CRM e IA já funcionarão apenas com Render + Firebase.*
+*Desenvolvido para Instituto Liana Gomes*
