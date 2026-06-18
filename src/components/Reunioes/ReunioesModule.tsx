@@ -273,7 +273,7 @@ export function ReunioesModule() {
     } else {
       const SpeechRecognitionClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (!SpeechRecognitionClass) {
-        alert('Seu navegador/ambiente de visualização não suporta a Web Speech API nativa. Por favor, digite o texto ou utilize o simulador inteligente abaixo!');
+        alert('Seu navegador/ambiente de visualização não suporta a Web Speech API nativa. Por favor, digite ou cole o texto da ata da reunião diretamente na caixa de texto do editor para extração automática!');
         return;
       }
 

@@ -16,12 +16,248 @@ import {
   X, 
   TrendingUp, 
   Calendar,
-  ChevronRight
+  ChevronRight,
+  FileText
 } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export function FinanceiroModule() {
   const { data, updateModuleData } = useStore();
   const pagamentos = data.pagamentos || [];
+
+  // Handler to generate and download a beautifully crafted PDF summary report for the current month
+  const handleGeneratePDF = () => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const mesNomeOpt = [
+      'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+      'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
+    const nomeMesAtual = mesNomeOpt[currentMonth];
+
+    // Filter current month payments
+    const currentMonthPayments = pagamentos.filter((p: any) => {
+      if (!p.vencimento) return false;
+      const dateParts = p.vencimento.split('-'); // YYYY-MM-DD
+      if (dateParts.length !== 3) return false;
+      const pYear = parseInt(dateParts[0], 10);
+      const pMonth = parseInt(dateParts[1], 10) - 1; // 0-based index
+      return pYear === currentYear && pMonth === currentMonth;
+    });
+
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    // Calculate stats for current month
+    let totalRecebido = 0;
+    let totalPendente = 0;
+    let totalAtrasado = 0;
+
+    currentMonthPayments.forEach((p: any) => {
+      const val = parseFloat(p.valorCombinado) || 0;
+      if (p.status === 'pago') {
+        totalRecebido += val;
+      } else if (p.status === 'atrasado') {
+        totalAtrasado += val;
+      } else {
+        totalPendente += val;
+      }
+    });
+
+    const totalGeral = totalRecebido + totalPendente + totalAtrasado;
+    const taxaAdimplencia = totalGeral > 0 ? Math.round((totalRecebido / totalGeral) * 100) : 100;
+
+    // Header segment background
+    doc.setFillColor(10, 25, 47); // Dark Navy #0A192F
+    doc.rect(0, 0, 210, 38, 'F');
+
+    // Title / branding block
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text('INSTITUTO LIANA GOMES', 15, 15);
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(212, 175, 55); // Brand Gold #D4AF37
+    doc.text('Relatório Integrado de Gestão Financeira & Cobrança', 15, 21);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(180, 190, 200);
+    doc.text(`Emitido em: ${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`, 15, 29);
+
+    // Month & Year Indicator card
+    doc.setFillColor(212, 175, 55); // Gold
+    doc.rect(135, 10, 60, 18, 'F');
+    
+    doc.setTextColor(10, 25, 47); // Navy text
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.text('PERÍODO DE CONTROLE', 138, 15);
+    
+    doc.setFontSize(11);
+    doc.text(`${nomeMesAtual.toUpperCase()} / ${currentYear}`, 138, 22);
+
+    // Metric cards (Y = 48)
+    const startY = 48;
+    const colWidth = 44;
+    const spacing = 4;
+    const xOffset = 15;
+
+    // Card 1: Received Amount
+    doc.setFillColor(243, 249, 245); // Soft green
+    doc.setDrawColor(210, 230, 215);
+    doc.roundedRect(xOffset, startY, colWidth, 20, 2, 2, 'FD');
+    doc.setTextColor(30, 95, 60);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.text('RECEBIDO NO MÊS', xOffset + 3, startY + 5);
+    doc.setFontSize(9.5);
+    doc.text(formatCurrency(totalRecebido), xOffset + 3, startY + 12);
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${currentMonthPayments.filter(p => p.status === 'pago').length} parcelas liquidas`, xOffset + 3, startY + 17);
+
+    // Card 2: To Receive (Pendente/Parcial)
+    const xBox2 = xOffset + colWidth + spacing;
+    doc.setFillColor(254, 249, 237); // Soft amber
+    doc.setDrawColor(253, 235, 190);
+    doc.roundedRect(xBox2, startY, colWidth, 20, 2, 2, 'FD');
+    doc.setTextColor(160, 95, 10);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.text('PROJETADO (A VENCER)', xBox2 + 3, startY + 5);
+    doc.setFontSize(9.5);
+    doc.text(formatCurrency(totalPendente), xBox2 + 3, startY + 12);
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${currentMonthPayments.filter(p => p.status === 'pendente' || p.status === 'parcial').length} parcelas em aberto`, xBox2 + 3, startY + 17);
+
+    // Card 3: Overdue Amount
+    const xBox3 = xBox2 + colWidth + spacing;
+    doc.setFillColor(254, 242, 242); // Soft rose
+    doc.setDrawColor(254, 215, 215);
+    doc.roundedRect(xBox3, startY, colWidth, 20, 2, 2, 'FD');
+    doc.setTextColor(175, 25, 25);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.text('ATRASO ATIVO NO MÊS', xBox3 + 3, startY + 5);
+    doc.setFontSize(9.5);
+    doc.text(formatCurrency(totalAtrasado), xBox3 + 3, startY + 12);
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${currentMonthPayments.filter(p => p.status === 'atrasado').length} em atraso`, xBox3 + 3, startY + 17);
+
+    // Card 4: Receipt rate
+    const xBox4 = xBox3 + colWidth + spacing;
+    doc.setFillColor(240, 246, 254); // Soft blue
+    doc.setDrawColor(215, 225, 248);
+    doc.roundedRect(xBox4, startY, colWidth, 20, 2, 2, 'FD');
+    doc.setTextColor(15, 55, 130);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.text('ADIMPLÊNCIA MENSAL', xBox4 + 3, startY + 5);
+    doc.setFontSize(9.5);
+    doc.text(`${taxaAdimplencia}%`, xBox4 + 3, startY + 12);
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    if (totalGeral > 0) {
+      doc.text(`De ${formatCurrency(totalGeral)} esperados`, xBox4 + 3, startY + 17);
+    } else {
+      doc.text('Nenhum previsto', xBox4 + 3, startY + 17);
+    }
+
+    // Line separator
+    doc.setDrawColor(220, 225, 230);
+    doc.line(15, 74, 195, 74);
+
+    // Detailed table header intro
+    doc.setTextColor(10, 25, 47);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text(`DEMONSTRATIVO DETALHADO - MÊS DE REFERÊNCIA`, 15, 81);
+
+    // Format tabular data
+    const tableData = currentMonthPayments.length > 0
+      ? currentMonthPayments.map((p: any) => {
+          const valStr = formatCurrency(parseFloat(p.valorCombinado) || 0);
+          const rawDate = p.vencimento ? new Date(p.vencimento + 'T12:00:00') : null;
+          const dateStr = rawDate ? rawDate.toLocaleDateString('pt-BR') : '-';
+          let labelStatus = 'A Vencer';
+          if (p.status === 'pago') labelStatus = 'Pago';
+          if (p.status === 'atrasado') labelStatus = 'Em Atraso';
+          if (p.status === 'parcial') labelStatus = 'Parcial';
+
+          return [
+            p.aluno || 'Aluna não identificada',
+            p.formacao || 'Curso não identificado',
+            valStr,
+            labelStatus,
+            dateStr,
+            p.responsavel || 'Equipe'
+          ];
+        })
+      : [['-', 'Sem lançamentos financeiros agendados ou registrados para este mês de referência.', '-', '-', '-', '-']];
+
+    // Trigger autoTable using extended or functional API safely
+    autoTable(doc, {
+      startY: 85,
+      margin: { left: 15, right: 15 },
+      head: [['Aluna', 'Formação / Programa', 'Valor', 'Status', 'Data Venc.', 'Responsável']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: {
+        fillColor: [10, 25, 47], // Matching branding dark blue (#0A192F)
+        textColor: [255, 255, 255],
+        fontSize: 8,
+        fontStyle: 'bold',
+        halign: 'left'
+      },
+      styles: {
+        fontSize: 8,
+        font: 'helvetica',
+        cellPadding: 2.5
+      },
+      columnStyles: {
+        2: { fontStyle: 'bold', halign: 'right' },
+        3: { fontStyle: 'bold' },
+        4: { halign: 'center' }
+      },
+      didParseCell: (dataCell) => {
+        if (dataCell.section === 'body' && dataCell.column.index === 3) {
+          const cellVal = dataCell.cell.raw;
+          if (cellVal === 'Pago') {
+            dataCell.cell.styles.textColor = [30, 95, 60];      // Green
+          } else if (cellVal === 'Em Atraso') {
+            dataCell.cell.styles.textColor = [175, 25, 25];     // Red
+          } else if (cellVal === 'Parcial') {
+            dataCell.cell.styles.textColor = [100, 30, 150];    // Purple
+          } else if (cellVal === 'A Vencer') {
+            dataCell.cell.styles.textColor = [160, 95, 10];     // Amber/Gold
+          }
+        }
+      }
+    });
+
+    // Page decoration & details
+    const pageCount = (doc as any).getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(7.5);
+      doc.setTextColor(140, 145, 155);
+      doc.text('Instituto Liana Gomes • Governança, Transparência & Desenvolvimento', 15, 287);
+      doc.text(`Página ${i} de ${pageCount}`, 195, 287, { align: 'right' });
+    }
+
+    const filename = `demonstrativo-mensal-${nomeMesAtual.toLowerCase()}-${currentYear}.pdf`;
+    doc.save(filename);
+  };
 
   // Local state for filters and views
   const [search, setSearch] = useState('');
@@ -203,7 +439,17 @@ export function FinanceiroModule() {
             Controle de mensalidades de alunas, parcelas em aberto e disparos rápidos de cobranças.
           </p>
         </div>
-        <div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button 
+            type="button"
+            onClick={handleGeneratePDF}
+            className="inline-flex items-center px-4 py-2 border border-[#1D4E89] hover:bg-[#1D4E89]/5 text-[#1D4E89] font-semibold rounded-lg shadow-sm transition bg-white text-sm cursor-pointer select-none"
+            title="Gerar e baixar relatório resumido em PDF para o mês atual"
+          >
+            <FileText className="w-4 h-4 mr-1.5 text-[#1D4E89]" />
+            Relatório do Mês (PDF)
+          </button>
+          
           <button 
             type="button"
             onClick={openAdd}

@@ -185,6 +185,103 @@
         "responsavel": { "type": "string" }
       },
       "required": ["nomeAluno", "emailAluno", "templateId"]
+    },
+    "Pessoa": {
+      "title": "Pessoa",
+      "description": "Information about a persona (lead or student)",
+      "type": "object",
+      "properties": {
+        "nome": { "type": "string" },
+        "email": { "type": "string" },
+        "telefone": { "type": "string" },
+        "tipoPessoa": { "type": "string" },
+        "status": { "type": "string" },
+        "temperatura": { "type": "string" },
+        "produtoInteresse": { "type": "string" },
+        "proximoContato": { "type": "string" }
+      },
+      "required": ["nome"]
+    },
+    "TarefaSuporte": {
+      "title": "TarefaSuporte",
+      "description": "A customized support task",
+      "type": "object",
+      "properties": {
+        "titulo": { "type": "string" },
+        "status": { "type": "string" },
+        "responsavel": { "type": "string" },
+        "pessoaId": { "type": "string" }
+      },
+      "required": ["titulo"]
+    },
+    "IlgcCanal": {
+      "title": "IlgcCanal",
+      "description": "An internal communication workspace channel",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nome": { "type": "string" },
+        "descricao": { "type": "string" },
+        "isPrivate": { "type": "boolean" },
+        "onlineMembers": { "type": "array" }
+      },
+      "required": ["id", "nome"]
+    },
+    "IlgcMensagem": {
+      "title": "IlgcMensagem",
+      "description": "A communication message or thread post",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "channelId": { "type": "string" },
+        "autorId": { "type": "string" },
+        "autorNome": { "type": "string" },
+        "avatar": { "type": "string" },
+        "texto": { "type": "string" },
+        "dataHora": { "type": "string" },
+        "pinned": { "type": "boolean" },
+        "reacoes": { "type": "array" },
+        "anexos": { "type": "array" },
+        "replies": { "type": "array" }
+      },
+      "required": ["id", "channelId", "autorNome", "texto"]
+    },
+    "IlgcNotificacao": {
+      "title": "IlgcNotificacao",
+      "description": "An operator workspace notification",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tipo": { "type": "string" },
+        "conteudo": { "type": "string" },
+        "origem": { "type": "string" },
+        "dataHora": { "type": "string" },
+        "lida": { "type": "boolean" },
+        "channelId": { "type": "string" }
+      },
+      "required": ["id", "conteudo", "origem", "lida"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "A system audit log for user actions",
+      "type": "object",
+      "properties": {
+        "action": { "type": "string" },
+        "pessoaId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["action", "pessoaId", "timestamp"]
+    },
+    "AllowedEmail": {
+      "title": "AllowedEmail",
+      "description": "An email address allowed to access the system",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" }
+      },
+      "required": ["email"]
     }
   },
   "firestore": {
@@ -227,6 +324,34 @@
     "/certificados_emitidos/{emitidoId}": {
       "schema": { "$ref": "#/entities/IssuedCertificate" },
       "description": "Collection of verified issued certificates"
+    },
+    "/pessoas/{pessoaId}": {
+      "schema": { "$ref": "#/entities/Pessoa" },
+      "description": "Unified collection of platform persons (leads/students)"
+    },
+    "/tarefas_suporte/{tsId}": {
+      "schema": { "$ref": "#/entities/TarefaSuporte" },
+      "description": "Collection of specific client support actions"
+    },
+    "/ilgc_canais/{canalId}": {
+      "schema": { "$ref": "#/entities/IlgcCanal" },
+      "description": "Information on each operational workspace channel"
+    },
+    "/ilgc_mensagens/{msgId}": {
+      "schema": { "$ref": "#/entities/IlgcMensagem" },
+      "description": "Interactive workspace messages and threaded reply streams"
+    },
+    "/ilgc_notificacoes/{noteId}": {
+      "schema": { "$ref": "#/entities/IlgcNotificacao" },
+      "description": "Unified notifications collection for real-time team collaboration alerts"
+    },
+    "/historico/{histId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Audit trail log records"
+    },
+    "/allowed_emails/{emailId}": {
+      "schema": { "$ref": "#/entities/AllowedEmail" },
+      "description": "Collection of allowed email addresses for platform access"
     }
   }
 }

@@ -8,7 +8,7 @@ dotenv.config();
 
 async function startServer() {
   const app = express();
-  const PORT = process.env.PORT || 3000;
+  const PORT = 3000;
 
   app.use(express.json());
 
@@ -51,7 +51,7 @@ async function startServer() {
       });
 
       const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-3.5-flash",
         contents: `Analise o resumo de reunião, conversas ou anotações fornecido a seguir. Extraia de forma objetiva e profissional as tarefas essenciais e recados/avisos importantes que devem constar no mural corporativo do Instituto Liana Gomes.
 
 Retorne EXCLUSIVAMENTE um objeto JSON válido (sem tags markdown de bloco adicionais ou formatação extra) no seguinte formato exato:
@@ -89,6 +89,94 @@ Texto de entrada:
     }
   });
 
+  // Send email notification for internal communication updates
+  app.post("/api/comunicacao/notificar", async (req, res) => {
+    try {
+      const { senderName, channelName, text, recipients } = req.body;
+
+      if (!recipients || !Array.isArray(recipients) || recipients.length === 0) {
+        return res.status(200).json({ success: true, message: "Nenhum destinatario de e-mail especificado." });
+      }
+
+      const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
+      const smtpPort = parseInt(process.env.SMTP_PORT || "587");
+      const smtpUser = process.env.SMTP_USER;
+      const smtpPass = process.env.SMTP_PASS;
+      const smtpFrom = process.env.SMTP_FROM || `"Central ILG" <noreply@institutolianagomes.com.br>`;
+
+      console.log(`[Email] Tentativa de envio de notificacao de @${senderName} em #${channelName}. Destinatarios:`, recipients);
+
+      const htmlBody = `
+        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #fbfbfc;">
+          <div style="background-color: #0A192F; padding: 15px; border-radius: 8px 8px 0 0; text-align: center;">
+            <h2 style="color: #D4AF37; margin: 0; font-size: 18px; font-family: sans-serif; letter-spacing: 1px;">INSTITUTO LIANA GOMES</h2>
+            <p style="color: #94a3b8; margin: 5px 0 0 0; font-size: 11px; text-transform: uppercase;">Central de Comunicacao Interna</p>
+          </div>
+          <div style="padding: 20px; background-color: #ffffff; border-radius: 0 0 8px 8px;">
+            <p style="font-size: 14px; color: #334155;">Ola,</p>
+            <p style="font-size: 14px; color: #334155; line-height: 1.5;">
+              Existe uma nova atividade na central de comunicacao. <b>${senderName}</b> enviou uma mensagem no canal <b>#${channelName}</b>:
+            </p>
+            <div style="margin: 20px 0; padding: 15px; background-color: #f8fafc; border-left: 4px solid #D4AF37; border-radius: 4px; font-style: italic; color: #1e293b; font-size: 13px; line-height: 1.6;">
+              "${text}"
+            </div>
+            <div style="text-align: center; margin-top: 30px;">
+              <a href="${process.env.APP_URL || "https://ais-pre-3iypzi7qv7ijpukcsylcjq-549193751481.us-west2.run.app"}" style="background-color: #0A192F; color: #D4AF37; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; font-size: 13px; border: 1px solid #D4AF37; display: inline-block;">
+                Acessar Portal ILG
+              </a>
+            </div>
+          </div>
+          <div style="margin-top: 20px; text-align: center; font-size: 11px; color: #64748b;">
+            Este e um e-mail automatico enviado pelo Portal Operacional do Instituto Liana Gomes.<br/>
+            Configure suas preferencias de espaco em Espacos de Trabalho.
+          </div>
+        </div>
+      `;
+
+      if (!smtpUser || !smtpPass) {
+        // Envio simulado - Log no terminal para auditoria
+        console.log("================ SIMULACAO DE E-MAIL (SMTP NAO CONFIGURADO) ================");
+        console.log(`DE  : ${smtpFrom}`);
+        console.log(`PARA: ${recipients.join(", ")}`);
+        console.log(`ASSUNTO: Nova mensagem em #${channelName} por @${senderName}`);
+        console.log(`CONTEUDO: "${text}"`);
+        console.log("==========================================================================");
+        return res.status(200).json({
+          success: true,
+          simulated: true,
+          message: "Notificacao de e-mail simulada com sucesso (SMTP nao configurado)."
+        });
+      }
+
+      // Envio Real via Nodemailer
+      const nodemailer = await import("nodemailer");
+      const transporter = nodemailer.default.createTransport({
+        host: smtpHost,
+        port: smtpPort,
+        secure: smtpPort === 465,
+        auth: {
+          user: smtpUser,
+          pass: smtpPass
+        }
+      });
+
+      await transporter.sendMail({
+        from: smtpFrom,
+        to: recipients.join(", "),
+        subject: `[ILG] Nova mensagem em #${channelName} de ${senderName}`,
+        html: htmlBody,
+        text: `[Central ILG] @${senderName} em #${channelName}: "${text}"`
+      });
+
+      console.log(`[Email] Notificacao real via SMTP enviada com sucesso para ${recipients.length} e-mails.`);
+      return res.status(200).json({ success: true, message: "E-mails enviados com sucesso." });
+    } catch (error: any) {
+      console.error("[Email] Erro ao processar envio de notificacoes por e-mail:", error);
+      // Retornar 200 com erro nos detalhes para nao estourar a interface do chat do usuario
+      return res.status(200).json({ success: false, error: error?.message || "Erro desconhecido ao despachar e-mail." });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
@@ -104,7 +192,7 @@ Texto de entrada:
     });
   }
 
-  app.listen(Number(PORT), "0.0.0.0", () => {
+  app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);
   });
 }

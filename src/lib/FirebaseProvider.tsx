@@ -1,5 +1,5 @@
 import React, { createContext, useEffect, useState } from 'react';
-import { auth } from './firebase';
+import { auth, loginAnonymously } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { startFirebaseListeners } from '../store';
 
@@ -9,11 +9,11 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
+    // Start database listeners immediately since we support unauthenticated/custom PIN login access syncs
+    startFirebaseListeners();
+
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
-      if (u) {
-        startFirebaseListeners();
-      }
     });
     return () => unsubscribe();
   }, []);

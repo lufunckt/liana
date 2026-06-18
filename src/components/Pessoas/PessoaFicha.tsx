@@ -9,6 +9,7 @@ import { useStore } from '../../store';
 import { cn, showToast, normalizeStatusSlug, normalizeOnboardingSlug, getStatusLabel, getOnboardingLabel } from '../../lib/utils';
 import { usePermissions } from '../../lib/permissions';
 import { TagManagerModal } from '../TagManagerModal';
+import { logAuditEvent } from '../../lib/audit';
 
 const COMPANY_PIX_CNPJ = '51.533.488/0001-09';
 
@@ -17,6 +18,10 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
 
   const { data, updateSingleField, addSingleDocument } = useStore();
   const { isReadOnly, hasPermission } = usePermissions();
+
+  useEffect(() => {
+    logAuditEvent('view_ficha', pessoa.id, { nome: pessoa.nome });
+  }, [pessoa.id, pessoa.nome]);
   const pessoas = data.pessoas || [];
   const tarefas = data.tarefas_suporte || [];
 
@@ -89,6 +94,7 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
   const [interactType, setInteractType] = useState('telefone');
   const [interactResp, setInteractResp] = useState(pessoa.responsavel || 'Ana');
   const [interactResumo, setInteractResumo] = useState('');
+  const [interactProximoPasso, setInteractProximoPasso] = useState('');
   const [showTagManager, setShowTagManager] = useState(false);
 
   const tagsList = data.tags_personalizaveis || [];
@@ -103,10 +109,12 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
       date: interactDate,
       type: interactType,
       responsavel: interactResp,
-      resumo: interactResumo.trim()
+      resumo: interactResumo.trim(),
+      proximoPasso: interactProximoPasso.trim()
     };
     setInteracoes([newEntry, ...interacoes]);
     setInteractResumo('');
+    setInteractProximoPasso('');
     showToast('Ação registrada na timeline local! Lembre-se de clicar em "Salvar Alterações" no rodapé para sincronizar definitivo.', 'info');
   };
 
@@ -382,6 +390,13 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
 
       await updateSingleField('pessoas', pessoa.id, updatedModel);
       
+      if (normalizeStatusSlug(status) !== normalizeStatusSlug(pessoa.status || '')) {
+        await logAuditEvent('status_update', pessoa.id, { 
+          oldStatus: normalizeStatusSlug(pessoa.status || ''), 
+          newStatus: normalizeStatusSlug(status) 
+        });
+      }
+      
       showToast('Cadastro operacional salvo com sucesso no Firestore!', 'success');
       onClose();
     } catch (err: any) {
@@ -433,14 +448,14 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
         </div>
 
         {/* COMPONENT SUB-TAB NAV BAR */}
-        <div className="bg-slate-50 border-b border-slate-200 p-2 px-6 flex flex-wrap gap-2 shrink-0 select-none">
-          <button onClick={() => setActiveSubTab('resumo')} className={cn("px-3.5 py-1.5 rounded-lg text-xs font-bold transition", activeSubTab === 'resumo' ? 'bg-[#0A192F] text-white' : 'text-slate-505 hover:bg-slate-100')}>Resumo</button>
-          <button onClick={() => setActiveSubTab('comercial')} className={cn("px-3.5 py-1.5 rounded-lg text-xs font-bold transition", activeSubTab === 'comercial' ? 'bg-[#0A192F] text-white' : 'text-slate-505 hover:bg-slate-100')}>Comercial</button>
-          <button onClick={() => setActiveSubTab('onboarding')} className={cn("px-3.5 py-1.5 rounded-lg text-xs font-bold transition", activeSubTab === 'onboarding' ? 'bg-[#0A192F] text-white' : 'text-slate-505 hover:bg-slate-100')}>Aluna/Onboarding</button>
-          <button onClick={() => setActiveSubTab('suporte')} className={cn("px-3.5 py-1.5 rounded-lg text-xs font-bold transition", activeSubTab === 'suporte' ? 'bg-[#0A192F] text-white' : 'text-slate-505 hover:bg-slate-100')}>Suporte</button>
-          <button onClick={() => setActiveSubTab('financeiro')} className={cn("px-3.5 py-1.5 rounded-lg text-xs font-bold transition", activeSubTab === 'financeiro' ? 'bg-[#0A192F] text-white' : 'text-slate-505 hover:bg-slate-100')}>Financeiro</button>
-          <button onClick={() => setActiveSubTab('certificados')} className={cn("px-3.5 py-1.5 rounded-lg text-xs font-bold transition", activeSubTab === 'certificados' ? 'bg-[#0A192F] text-white' : 'text-slate-505 hover:bg-slate-100')}>Certificados</button>
-          <button onClick={() => setActiveSubTab('historico')} className={cn("px-3.5 py-1.5 rounded-lg text-xs font-bold transition", activeSubTab === 'historico' ? 'bg-[#0A192F] text-white' : 'text-slate-505 hover:bg-slate-100')}>Histórico Timeline</button>
+        <div className="bg-slate-50 border-b border-slate-200 p-2.5 px-4 md:px-6 flex overflow-x-auto gap-2 shrink-0 select-none no-scrollbar whitespace-nowrap">
+          <button onClick={() => setActiveSubTab('resumo')} className={cn("px-3.5 py-1.5 rounded-lg text-xs font-bold transition shrink-0", activeSubTab === 'resumo' ? 'bg-[#0A192F] text-white' : 'text-slate-505 hover:bg-slate-100')}>Resumo</button>
+          <button onClick={() => setActiveSubTab('comercial')} className={cn("px-3.5 py-1.5 rounded-lg text-xs font-bold transition shrink-0", activeSubTab === 'comercial' ? 'bg-[#0A192F] text-white' : 'text-slate-505 hover:bg-slate-100')}>Comercial</button>
+          <button onClick={() => setActiveSubTab('onboarding')} className={cn("px-3.5 py-1.5 rounded-lg text-xs font-bold transition shrink-0", activeSubTab === 'onboarding' ? 'bg-[#0A192F] text-white' : 'text-slate-505 hover:bg-slate-100')}>Aluna/Onboarding</button>
+          <button onClick={() => setActiveSubTab('suporte')} className={cn("px-3.5 py-1.5 rounded-lg text-xs font-bold transition shrink-0", activeSubTab === 'suporte' ? 'bg-[#0A192F] text-white' : 'text-slate-505 hover:bg-slate-100')}>Suporte</button>
+          <button onClick={() => setActiveSubTab('financeiro')} className={cn("px-3.5 py-1.5 rounded-lg text-xs font-bold transition shrink-0", activeSubTab === 'financeiro' ? 'bg-[#0A192F] text-white' : 'text-slate-505 hover:bg-slate-100')}>Financeiro</button>
+          <button onClick={() => setActiveSubTab('certificados')} className={cn("px-3.5 py-1.5 rounded-lg text-xs font-bold transition shrink-0", activeSubTab === 'certificados' ? 'bg-[#0A192F] text-white' : 'text-slate-505 hover:bg-slate-100')}>Certificados</button>
+          <button onClick={() => setActiveSubTab('historico')} className={cn("px-3.5 py-1.5 rounded-lg text-xs font-bold transition shrink-0", activeSubTab === 'historico' ? 'bg-[#0A192F] text-white' : 'text-slate-505 hover:bg-slate-100')}>Histórico Timeline</button>
         </div>
 
         {/* MODAL BODY (LEFT TABS - RIGHT COCKPIT) */}
@@ -908,6 +923,17 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
                     />
                   </div>
 
+                  <div>
+                    <label className="text-[9px] font-black text-slate-400 block mb-1 uppercase">Próximo Passo / Ação de Follow-up</label>
+                    <input 
+                      type="text" 
+                      value={interactProximoPasso}
+                      onChange={e => setInteractProximoPasso(e.target.value)}
+                      placeholder="Ex: Enviar proposta de desconto na sexta, telefonar após as 14h, etc."
+                      className="w-full text-xs border border-slate-305 rounded px-2 py-1.5 outline-none focus:ring-1 focus:ring-[#0A192F] bg-white text-slate-800 font-medium"
+                    />
+                  </div>
+
                   <div className="flex justify-end">
                     <button
                       type="button"
@@ -950,9 +976,29 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
                           </div>
 
                           {item.resumo ? (
-                            <p className="text-xs text-slate-600 leading-relaxed font-semibold bg-slate-50/50 p-2.5 rounded-lg border border-slate-100">{item.resumo}</p>
+                            <div className="space-y-2">
+                              <p className="text-xs text-slate-600 leading-relaxed font-semibold bg-slate-50/50 p-2.5 rounded-lg border border-slate-100">{item.resumo}</p>
+                              {item.proximoPasso && (
+                                <div className="flex items-center gap-1.5 bg-[#D4AF37]/5 border border-[#D4AF37]/20 p-2 rounded-lg text-[11px] text-amber-900 font-medium">
+                                  <span className="px-1.5 py-0.5 shrink-0 bg-[#D4AF37]/15 border border-[#D4AF37]/25 text-[#9B7C1D] rounded text-[9px] font-bold uppercase">
+                                    👉 Próximo Passo
+                                  </span>
+                                  <span className="font-semibold text-slate-700">{item.proximoPasso}</span>
+                                </div>
+                              )}
+                            </div>
                           ) : (
-                            <p className="text-xs text-slate-655 leading-relaxed font-semibold">{item.text}</p>
+                            <div className="space-y-2">
+                              <p className="text-xs text-slate-655 leading-relaxed font-semibold">{item.text}</p>
+                              {item.proximoPasso && (
+                                <div className="flex items-center gap-1.5 bg-[#D4AF37]/5 border border-[#D4AF37]/20 p-2 rounded-lg text-[11px] text-amber-900 font-medium">
+                                  <span className="px-1.5 py-0.5 shrink-0 bg-[#D4AF37]/15 border border-[#D4AF37]/25 text-[#9B7C1D] rounded text-[9px] font-bold uppercase">
+                                    👉 Próximo Passo
+                                  </span>
+                                  <span className="font-semibold text-slate-700">{item.proximoPasso}</span>
+                                </div>
+                              )}
+                            </div>
                           )}
                         </div>
                       );

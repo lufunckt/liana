@@ -1,21 +1,335 @@
 import React, { useState, useMemo } from 'react';
 import { useStore } from '../store';
+import { motion } from 'motion/react';
 import { 
   Briefcase, MessageSquare, Sparkles, Trash2, Pin, CheckSquare, 
   Send, User, AlertTriangle, Lightbulb, Check, Plus, Loader2, TrendingUp,
   Activity, ShieldAlert, ShieldCheck, RefreshCw, UserCheck, CreditCard,
-  ArrowRight, CheckCircle2, Award, HeartPulse, Lock
+  ArrowRight, CheckCircle2, Award, HeartPulse, Lock, Sliders, Settings,
+  Eye, EyeOff, Target, PlusCircle
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 export function Dashboard({ selectedProfile }: { selectedProfile?: string | null }) {
-  const { data, updateModuleData, updateSingleField } = useStore();
+  const { data, updateModuleData, updateSingleField, addSingleDocument } = useStore();
   const tarefas = data.tarefas_suporte || [];
   const pagamentos = data.pagamentos || [];
   const pessoas = data.pessoas || [];
 
-  const [dashboardTab, setDashboardTab] = useState<'mural' | 'health' | 'performance'>('mural');
+  const [dashboardTab, setDashboardTab] = useState<'mural' | 'health' | 'performance' | 'alertas'>('mural');
+  const [alertFilterCategory, setAlertFilterCategory] = useState<'all' | 'tarefas' | 'leads' | 'pagamentos'>('all');
+  const [alertFilterTime, setAlertFilterTime] = useState<'all' | 'vencidos' | 'proximos'>('all');
+
+  // --- COMPUTAÇÃO DYNAMIC DO SISTEMA DE ALERTAS OPERACIONAIS (EXECUTIVE DASHBOARD) ---
+  const alertStats = useMemo(() => {
+    const hojeStr = new Date().toISOString().split('T')[0];
+    
+    const getDaysDiff = (dateStr1: string, dateStr2: string) => {
+      if (!dateStr1 || !dateStr2) return 999;
+      const d1 = new Date(dateStr1);
+      const d2 = new Date(dateStr2);
+      const diffTime = d1.getTime() - d2.getTime();
+      return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    };
+
+    // 1. Tarefas Internas (Vencidas ou Próximas em 3 dias)
+    const tarefasMapeadas = tarefas.map((t: any) => {
+      const isResolved = t.status === 'concluído' || t.status === 'resolvido' || t.status === 'concluido';
+      const isOverdue = !isResolved && t.prazo && t.prazo < hojeStr;
+      const daysDiff = t.prazo ? getDaysDiff(t.prazo, hojeStr) : 999;
+      const isNear = !isResolved && t.prazo && daysDiff >= 0 && daysDiff <= 3;
+      return {
+        ...t,
+        isOverdue,
+        isNear,
+        daysDiff
+      };
+    }).filter((t: any) => t.isOverdue || t.isNear);
+
+    // 2. Leads Follow-ups (Vencidos ou Próximos em 3 dias)
+    const leadsMapeados = pessoas.map((p: any) => {
+      const isLead = (p.tipoPessoa || 'lead') === 'lead';
+      const hasFollowup = !!p.proximoContato;
+      const isConvertedOrLost = p.status === 'comprou' || p.status === 'perdido';
+      
+      const isOverdue = isLead && !isConvertedOrLost && hasFollowup && p.proximoContato < hojeStr;
+      const daysDiff = p.proximoContato ? getDaysDiff(p.proximoContato, hojeStr) : 999;
+      const isNear = isLead && !isConvertedOrLost && hasFollowup && daysDiff >= 0 && daysDiff <= 3;
+      return {
+        ...p,
+        isOverdue,
+        isNear,
+        daysDiff
+      };
+    }).filter((p: any) => p.isOverdue || p.isNear);
+
+    // 3. Pagamentos de Alunas (Atrasados ou Próximos em 7 dias)
+    const pagamentosMapeados = pagamentos.map((pag: any) => {
+      const isNotPaid = pag.status !== 'pago';
+      const hasVencimento = !!pag.vencimento;
+      const isOverdue = isNotPaid && hasVencimento && pag.vencimento < hojeStr;
+      const daysDiff = pag.vencimento ? getDaysDiff(pag.vencimento, hojeStr) : 999;
+      const isNear = isNotPaid && hasVencimento && daysDiff >= 0 && daysDiff <= 7;
+      return {
+        ...pag,
+        isOverdue,
+        isNear,
+        daysDiff
+      };
+    }).filter((pag: any) => pag.isOverdue || pag.isNear);
+
+    const totalAlertas = tarefasMapeadas.length + leadsMapeados.length + pagamentosMapeados.length;
+    const totalVencidos = 
+      tarefasMapeadas.filter((t: any) => t.isOverdue).length +
+      leadsMapeados.filter((p: any) => p.isOverdue).length +
+      pagamentosMapeados.filter((pag: any) => pag.isOverdue).length;
+
+    return {
+      tarefas: tarefasMapeadas,
+      leads: leadsMapeados,
+      pagamentos: pagamentosMapeados,
+      totalAlertas,
+      totalVencidos
+    };
+  }, [tarefas, pessoas, pagamentos]);
+
+  // --- REGRAS E TIPOS DOS WIDGETS OPERACIONAIS ---
+  interface DashboardWidget {
+    id: string;
+    title: string;
+    metricType: 'alunas_ativas' | 'leads_hoje' | 'suporte_pendente' | 'receita_realizada' | 'onboarding_concluido' | 'custom_static';
+    pinned: boolean;
+    color: 'blue' | 'emerald' | 'orange' | 'gold' | 'purple' | 'rose';
+    targetGoal: number;
+    customValue?: number;
+    customUnit?: string;
+  }
+
+  const [widgets, setWidgets] = useState<DashboardWidget[]>(() => {
+    const saved = localStorage.getItem('ilg_custom_dashboard_widgets_v2');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error("Erro ao carregar widgets do localStorage", e);
+      }
+    }
+    return [
+      {
+        id: 'alunos_ativos',
+        title: 'Alunas Ativas',
+        metricType: 'alunas_ativas',
+        pinned: true,
+        color: 'blue',
+        targetGoal: 15,
+      },
+      {
+        id: 'leads_hoje',
+        title: 'Leads de Vendas Hoje',
+        metricType: 'leads_hoje',
+        pinned: true,
+        color: 'orange',
+        targetGoal: 5,
+      },
+      {
+        id: 'suporte_pendente',
+        title: 'Incidentes de Suporte',
+        metricType: 'suporte_pendente',
+        pinned: true,
+        color: 'emerald',
+        targetGoal: 5,
+      },
+      {
+        id: 'receita_realizada',
+        title: 'Faturamento Realizado',
+        metricType: 'receita_realizada',
+        pinned: false,
+        color: 'gold',
+        targetGoal: 30000,
+      },
+      {
+        id: 'onboarding_concluido',
+        title: 'Onboards Finalizados',
+        metricType: 'onboarding_concluido',
+        pinned: false,
+        color: 'purple',
+        targetGoal: 10,
+      }
+    ];
+  });
+
+  const saveWidgets = (updated: DashboardWidget[]) => {
+    setWidgets(updated);
+    localStorage.setItem('ilg_custom_dashboard_widgets_v2', JSON.stringify(updated));
+  };
+
+  const [showWidgetSettings, setShowWidgetSettings] = useState(false);
+  
+  // Custom widget creation sub-state
+  const [customTitle, setCustomTitle] = useState('');
+  const [customMetric, setCustomMetric] = useState<DashboardWidget['metricType']>('custom_static');
+  const [customColor, setCustomColor] = useState<DashboardWidget['color']>('blue');
+  const [customGoal, setCustomGoal] = useState<number>(10);
+  const [customVal, setCustomVal] = useState<number>(0);
+  const [customUnit, setCustomUnit] = useState('');
+
+  // Quick loaders
+  const [quickAddLeadLoading, setQuickAddLeadLoading] = useState(false);
+  const [quickAddStudentLoading, setQuickAddStudentLoading] = useState(false);
+
+  // Add structured values to Firestore/Offline Store "De Verdade"
+  const handleQuickAddLead = async () => {
+    setQuickAddLeadLoading(true);
+    const todayStr = new Date().toISOString().split('T')[0];
+    const firstNames = ['Mariana', 'Camila', 'Letícia', 'Fernanda', 'Gabriela', 'Beatriz', 'Juliana', 'Carla', 'Débora', 'Amanda'];
+    const lastNames = ['Silva', 'Santos', 'Medeiros', 'Lima', 'Rocha', 'Costa', 'Almeida', 'Souza', 'Nogueira', 'Oliveira'];
+    const randomName = `${firstNames[Math.floor(Math.random() * firstNames.length)]} ${lastNames[Math.floor(Math.random() * lastNames.length)]} (Cadastro Real)`;
+    const randomEmail = `lead.${Math.random().toString(36).substring(2, 7)}@gmail.com`;
+    
+    const newLead = {
+      id: 'lead_' + Date.now(),
+      nome: randomName,
+      email: randomEmail,
+      telefone: `(11) 9${Math.floor(Math.random() * 90000000 + 10000000)}`,
+      tipoPessoa: 'lead',
+      status: 'novo-lead',
+      temperatura: 'quente',
+      produtoInteresse: 'Formação Compliance Executiva',
+      proximoContato: todayStr,
+      dataCadastro: todayStr,
+      timeline: [
+        { text: 'Lead registrado em tempo real através do Assistente de Teclado no Monitor de Widgets.', date: 'Agora', type: 'system' }
+      ]
+    };
+
+    try {
+      await addSingleDocument('pessoas', newLead);
+    } catch (e) {
+      console.error("Erro ao salvar lead em tempo real", e);
+    } finally {
+      setQuickAddLeadLoading(false);
+    }
+  };
+
+  const handleQuickAddStudent = async () => {
+    setQuickAddStudentLoading(true);
+    const todayStr = new Date().toISOString().split('T')[0];
+    const firstNames = ['Tatiane', 'Gisele', 'Verônica', 'Bárbara', 'Aline', 'Simone', 'Lorena', 'Priscila', 'Clarisse', 'Helena'];
+    const lastNames = ['Fonseca', 'Cardoso', 'Xavier', 'Teixeira', 'Machado', 'Melo', 'Reis', 'Cavalcante', 'Duarte', 'Borges'];
+    const randomName = `${firstNames[Math.floor(Math.random() * firstNames.length)]} ${lastNames[Math.floor(Math.random() * lastNames.length)]} (Matrícula Ativa)`;
+    const randomEmail = `aluna.${Math.random().toString(36).substring(2, 7)}@nutror.com.br`;
+    
+    const newStudent = {
+      id: 'aluna_' + Date.now(),
+      nome: randomName,
+      email: randomEmail,
+      telefone: `(21) 9${Math.floor(Math.random() * 90000000 + 10000000)}`,
+      tipoPessoa: 'aluna',
+      status: 'ativo',
+      temperatura: 'cliente',
+      produtoInteresse: 'Formação em Liderança & Governança',
+      proximoContato: todayStr,
+      dataCadastro: todayStr,
+      acessoNutror: true,
+      acessoMRP: true,
+      entrouGrupo: true,
+      respondeuInicial: true,
+      timeline: [
+        { text: 'Ingressada no sistema e onboarding finalizado em tempo real pelo Monitor de Widgets.', date: 'Agora', type: 'system' }
+      ]
+    };
+
+    try {
+      await addSingleDocument('pessoas', newStudent);
+    } catch (e) {
+      console.error("Erro ao salvar aluna em tempo real", e);
+    } finally {
+      setQuickAddStudentLoading(false);
+    }
+  };
+
+  const getWidgetValue = (metricType: DashboardWidget['metricType'], customValue?: number) => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    switch (metricType) {
+      case 'alunas_ativas':
+        return pessoas.filter(p => p.tipoPessoa === 'aluna').length;
+      
+      case 'leads_hoje':
+        return pessoas.filter(p => {
+          const isLead = !p.tipoPessoa || p.tipoPessoa === 'lead';
+          if (!isLead) return false;
+          const dateMatches = p.dataCadastro === todayStr || p.dataCriacao === todayStr || p.criadoEm === todayStr;
+          const timelineMatches = p.timeline?.some((t: any) => t.date === 'Agora' || (t.date && t.date.startsWith(todayStr)));
+          return dateMatches || timelineMatches || p.createdToday;
+        }).length;
+      
+      case 'suporte_pendente':
+        return tarefas.filter(t => t.status !== 'concluido' && t.status !== 'resolvido' && t.tipo !== 'mural_recado').length;
+      
+      case 'receita_realizada':
+        return pagamentos
+          .filter(p => p.status === 'pago')
+          .reduce((acc, p) => acc + (parseFloat(p.valorCombinado) || 0), 0);
+      
+      case 'onboarding_concluido':
+        return pessoas.filter(p => p.tipoPessoa === 'aluna' && p.acessoNutror && p.entrouGrupo && p.acessoMRP && p.respondeuInicial).length;
+      
+      case 'custom_static':
+        return customValue || 0;
+      
+      default:
+        return 0;
+    }
+  };
+
+  const handleAddNewWidget = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customTitle.trim()) {
+      alert("Por favor, informe o título do seu widget.");
+      return;
+    }
+
+    const newWidget: DashboardWidget = {
+      id: 'custom_widget_' + Date.now(),
+      title: customTitle,
+      metricType: customMetric,
+      pinned: true,
+      color: customColor,
+      targetGoal: customGoal || 10,
+      customValue: customMetric === 'custom_static' ? customVal : undefined,
+      customUnit: customMetric === 'custom_static' ? (customUnit || 'unid.') : undefined
+    };
+
+    saveWidgets([...widgets, newWidget]);
+    setCustomTitle('');
+    setCustomGoal(10);
+    setCustomVal(0);
+    setCustomUnit('');
+    alert("Seu widget operacional customizado foi criado e fixado com sucesso!");
+  };
+
+  const handleTogglePinWidget = (id: string) => {
+    const updated = widgets.map(w => w.id === id ? { ...w, pinned: !w.pinned } : w);
+    saveWidgets(updated);
+  };
+
+  const handleRemoveWidget = (id: string) => {
+    if (confirm("Tem certeza que deseja apagar permanentemente esse widget operacional do seu painel?")) {
+      const updated = widgets.filter(w => w.id !== id);
+      saveWidgets(updated);
+    }
+  };
+
+  const handleChangeWidgetGoal = (id: string, goal: number) => {
+    const updated = widgets.map(w => w.id === id ? { ...w, targetGoal: goal } : w);
+    saveWidgets(updated);
+  };
+
+  const handleChangeWidgetColor = (id: string, color: DashboardWidget['color']) => {
+    const updated = widgets.map(w => w.id === id ? { ...w, color } : w);
+    saveWidgets(updated);
+  };
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -140,13 +454,20 @@ export function Dashboard({ selectedProfile }: { selectedProfile?: string | null
 
   // Local Storage workspace action
   const handleSelectWorkspace = (profileId: string) => {
-    localStorage.setItem('ilg_selected_profile', profileId);
+    const profileNames: Record<string, string> = {
+      liana: 'Liana Gomes',
+      ana: 'Ana',
+      nuria: 'Núria',
+      luiza: 'Luiza'
+    };
+    const activeName = (selectedProfile && profileNames[selectedProfile]) || selectedProfile || 'Usuária';
+
+    if (selectedProfile && profileId !== selectedProfile) {
+      alert(`Acesso Restrito: Cada colaboradora deve utilzar seu próprio login pessoal e acessar seu painel correspondente. Seu login atual é de: ${activeName}.`);
+      return;
+    }
     // Switch to spaces tab dynamically
     window.dispatchEvent(new CustomEvent('change_active_tab', { detail: 'espacos' }));
-    // Wait slightly and refresh page so layouts and store get completely syncd for the active profile
-    setTimeout(() => {
-      window.location.reload();
-    }, 120);
   };
 
   const handleAccessComunicacaoInterna = () => {
@@ -295,20 +616,37 @@ export function Dashboard({ selectedProfile }: { selectedProfile?: string | null
 
   // --- SISTEMA DE PERFORMANCE E ATIVIDADES DAS COLABORADORAS (EXCLUSIVO LIANA) ---
   const activeProfile = selectedProfile || localStorage.getItem('ilg_selected_profile') || 'liana';
-  const isLiana = activeProfile === 'liana';
+  const isLiana = activeProfile === 'liana' || activeProfile === 'ericocavalheiro.psico';
 
-  const [performancePeriod, setPerformancePeriod] = useState<'hoje' | 'ontem' | 'mes' | 'todos'>('hoje');
+  const [performancePeriod, setPerformancePeriod] = useState<'hoje' | 'ontem' | 'mes' | 'todos'>('todos');
 
   const dateIntervals = useMemo(() => {
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    const format = (d: Date) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
+    
     return {
-      todayStr: '2026-06-04',
-      yesterdayStr: '2026-06-03',
-      currentMonth: '2026-06'
+      todayStr: format(today),
+      yesterdayStr: format(yesterday),
+      currentMonth: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
     };
   }, []);
 
   const [targetColaborador, setTargetColaborador] = useState('ana');
-  const [manualDate, setManualDate] = useState('2026-06-04');
+  const [manualDate, setManualDate] = useState(() => {
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const d = String(today.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  });
   const [manualAbordagens, setManualAbordagens] = useState('0');
   const [manualFollowups, setManualFollowups] = useState('0');
   const [manualFechamentos, setManualFechamentos] = useState('0');
@@ -768,8 +1106,13 @@ export function Dashboard({ selectedProfile }: { selectedProfile?: string | null
                 <p className="text-xs text-slate-600 font-medium leading-relaxed mb-4">{p.description}</p>
               </div>
               
-              <button className="w-full text-center text-xs font-bold py-2 px-3 bg-slate-50 text-[#0A192F] group-hover:bg-[#0A192F] group-hover:text-white rounded-xl transition-all flex items-center justify-center gap-1.5 border border-slate-200/60 shadow-xs">
-                Acessar Mesa
+              <button className={cn(
+                "w-full text-center text-xs font-bold py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 border shadow-xs",
+                p.id === selectedProfile 
+                  ? "bg-slate-50 text-[#0A192F] group-hover:bg-[#0A192F] group-hover:text-white border-slate-200/60" 
+                  : "bg-slate-100 text-slate-400 border-transparent cursor-not-allowed"
+              )}>
+                {p.id === selectedProfile ? 'Minha Mesa' : 'Mesa Restrita'}
               </button>
             </div>
           ))}
@@ -825,6 +1168,26 @@ export function Dashboard({ selectedProfile }: { selectedProfile?: string | null
             </span>
           )}
         </button>
+        <button
+          onClick={() => setDashboardTab('alertas')}
+          className={cn(
+            "px-6 py-3 font-bold text-xs uppercase tracking-wider border-b-2 transition-all cursor-pointer select-none flex items-center gap-2 relative",
+            dashboardTab === 'alertas'
+              ? "border-[#0A192F] text-[#0A192F]"
+              : "border-transparent text-slate-400 hover:text-slate-700"
+          )}
+        >
+          <AlertTriangle className={cn("w-4 h-4", alertStats.totalVencidos > 0 ? "text-rose-600 animate-pulse" : "text-amber-500")} />
+          Alertas de Processo
+          {alertStats.totalAlertas > 0 && (
+            <span className={cn(
+              "flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[9px] font-black text-white shadow",
+              alertStats.totalVencidos > 0 ? "bg-rose-600" : "bg-amber-500 text-slate-950"
+            )}>
+              {alertStats.totalAlertas}
+            </span>
+          )}
+        </button>
         {isLiana ? (
           <button
             onClick={() => setDashboardTab('performance')}
@@ -851,6 +1214,440 @@ export function Dashboard({ selectedProfile }: { selectedProfile?: string | null
 
       {dashboardTab === 'mural' && (
         <>
+          {/* NOTICE BANNER FOR PROCESS ALERTS */}
+          {alertStats.totalAlertas > 0 && (
+            <div className={cn(
+              "p-4 rounded-2xl border flex flex-col md:flex-row items-center justify-between gap-4 text-left mb-6 transition shadow-xs",
+              alertStats.totalVencidos > 0 
+                ? "bg-rose-50 border-rose-200 text-rose-950"
+                : "bg-amber-50/70 border-amber-150 text-amber-955"
+            )}>
+              <div className="flex items-center gap-3">
+                <div className={cn("p-2 rounded-xl shrink-0", alertStats.totalVencidos > 0 ? "bg-rose-100 text-rose-600" : "bg-amber-100 text-amber-600")}>
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold flex items-center gap-1.5">
+                    Central de Alertas de Governança Ativa
+                    {alertStats.totalVencidos > 0 && <span className="bg-rose-600 text-white rounded p-0.5 px-1 text-[8px] uppercase tracking-widest font-black animate-pulse">Urgente</span>}
+                  </h4>
+                  <p className="text-xs text-slate-550 leading-relaxed mt-0.5">
+                    Sua equipe possui <span className="font-extrabold">{alertStats.totalAlertas} alertas de suporte e venda</span> ativos em tela (sendo <span className="text-rose-650 font-extrabold">{alertStats.totalVencidos} vencidos / atrasados</span>). Resolva-os com facilidade diretamente na aba dedicada.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setDashboardTab('alertas')}
+                className={cn(
+                  "px-4 py-2 font-black text-xs uppercase tracking-wider rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs",
+                  alertStats.totalVencidos > 0
+                    ? "bg-rose-600 text-white hover:bg-rose-700"
+                    : "bg-amber-500 text-[#0A192F] hover:bg-amber-600"
+                )}
+              >
+                Gerenciar Alertas
+                <ArrowRight className="w-4 h-4 shrink-0" />
+              </button>
+            </div>
+          )}
+
+          {/* 📍 MONITOR OPERACIONAL - COMPONENTE DE WIDGETS CUSTOMIZÁVEIS */}
+          <div className="bg-slate-50/70 border border-slate-200/80 p-6 rounded-2xl shadow-sm text-left mb-6 space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="p-0.5 px-1.5 bg-[#0A192F] text-[#D4AF37] border border-[#0A192F] rounded text-[8px] font-black uppercase tracking-widest select-none">Monitoramento Live</span>
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                </div>
+                <h3 className="text-lg font-extrabold text-[#0A192F] flex items-center gap-2 mt-1">
+                  <Sliders className="w-5 h-5 text-slate-800" />
+                  Métricas Operacionais Integradas
+                </h3>
+                <p className="text-slate-500 text-xs mt-0.5">Visão imediata de alunos ativos, cadastros de hoje e faturamento. Fixe e gerencie seus KPIs.</p>
+              </div>
+              <div>
+                <button
+                  onClick={() => setShowWidgetSettings(!showWidgetSettings)}
+                  className={cn(
+                    "flex items-center gap-1.5 py-2 px-3.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer border select-none",
+                    showWidgetSettings 
+                      ? "bg-[#0A192F] text-amber-400 border-[#0a192f] hover:opacity-90"
+                      : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                  )}
+                >
+                  <Settings className={cn("w-4 h-4", showWidgetSettings && "animate-spin")} />
+                  {showWidgetSettings ? "Recolher Editor" : "Personalizar Painel"}
+                </button>
+              </div>
+            </div>
+
+            {/* Config Panel Drawer */}
+            {showWidgetSettings && (
+              <div className="bg-white border border-slate-200 p-5 rounded-xl space-y-5 animate-fade-in text-slate-800 shadow-sm">
+                <div className="border-b border-slate-100 pb-3">
+                  <h4 className="text-sm font-extrabold text-[#0A192F] flex items-center gap-1.5">
+                    <Settings className="w-4 h-4 text-indigo-500" />
+                    Gerenciar Layout e Metas dos Seus KPIs
+                  </h4>
+                  <p className="text-[11px] text-slate-500">Configure metas operacionais, escolha cores decorativas ou oculte/exiba cartões de métricas do mural.</p>
+                </div>
+
+                {/* Grid for modifying existing widgets */}
+                <div className="space-y-3">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Seus Cartões de Indicadores</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-72 overflow-y-auto pr-1">
+                    {widgets.map((w) => (
+                      <div key={w.id} className="border border-slate-150 p-3 rounded-lg flex items-center justify-between gap-3 bg-slate-50/50 hover:bg-slate-50 transition-all">
+                        <div className="flex items-center gap-2' shrink-0">
+                          <button
+                            onClick={() => handleTogglePinWidget(w.id)}
+                            className={cn(
+                              "p-1.5 rounded transition-all mr-2",
+                              w.pinned 
+                                ? "bg-amber-50 text-amber-600 border border-amber-250 animate-pulse" 
+                                : "bg-slate-200 text-slate-400 border border-transparent hover:text-slate-600"
+                            )}
+                            title={w.pinned ? "Desafixar do Mural" : "Fixar no Mural"}
+                          >
+                            {w.pinned ? <Pin className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                          </button>
+                          <div>
+                            <span className="text-xs font-bold text-slate-800 block">{w.title}</span>
+                            <span className="text-[9px] text-slate-450 uppercase tracking-widest font-mono shrink-0">
+                              Tipo: {w.metricType.replace('_', ' ')}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2.5">
+                          {/* Target Goal input */}
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-slate-400 font-bold">Meta:</span>
+                            <input
+                              type="number"
+                              value={w.targetGoal}
+                              onChange={(e) => handleChangeWidgetGoal(w.id, Math.max(1, parseInt(e.target.value) || 1))}
+                              className="w-14 text-xs font-bold text-[#0A192F] border border-slate-200 rounded px-1.5 py-0.5 text-center bg-white focus:outline-none focus:ring-1 focus:ring-[#0A192F]"
+                            />
+                          </div>
+
+                          {/* Color select dots */}
+                          <div className="flex items-center gap-0.5 bg-white p-1 rounded border border-slate-150">
+                            {(['blue', 'orange', 'emerald', 'gold', 'purple', 'rose'] as const).map((c) => (
+                              <button
+                                key={c}
+                                type="button"
+                                onClick={() => handleChangeWidgetColor(w.id, c)}
+                                className={cn(
+                                  "w-3 h-3 rounded-full hover:scale-125 transition-all",
+                                  c === 'blue' && "bg-sky-500",
+                                  c === 'orange' && "bg-orange-500",
+                                  c === 'emerald' && "bg-emerald-500",
+                                  c === 'gold' && "bg-yellow-500",
+                                  c === 'purple' && "bg-purple-500",
+                                  c === 'rose' && "bg-rose-500",
+                                  w.color === c ? "ring-2 ring-slate-800 ring-offset-1 z-10" : "opacity-80"
+                                )}
+                              />
+                            ))}
+                          </div>
+
+                          {/* Delete action for custom static widgets */}
+                          {w.id.startsWith('custom_widget_') && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveWidget(w.id)}
+                              className="text-slate-400 hover:text-red-600 p-1 rounded transition-all hover:bg-slate-100"
+                              title="Excluir widget"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Form to add a new custom widget */}
+                <div className="border-t border-slate-100 pt-4">
+                  <h5 className="text-[11px] font-black uppercase text-slate-450 tracking-wider mb-2.5">Criar Novo Widget Personalizado</h5>
+                  <form onSubmit={handleAddNewWidget} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3.5 items-end bg-slate-50 p-3.5 rounded-lg border border-slate-150">
+                    <div className="flex flex-col gap-1 col-span-1 sm:col-span-2">
+                      <span className="text-[9px] font-extrabold text-slate-500 uppercase tracking-widest">Nome do Widget</span>
+                      <input
+                        type="text"
+                        placeholder="Ex: Alunas Formadas"
+                        value={customTitle}
+                        onChange={(e) => setCustomTitle(e.target.value)}
+                        className="w-full text-xs border border-slate-250 bg-white rounded-lg px-2.5 py-1.5 text-[#0A192F] font-semibold"
+                      />
+                    </div>
+                    
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[9px] font-extrabold text-slate-500 uppercase tracking-widest font-sans">Origem Métrica</span>
+                      <select
+                        value={customMetric}
+                        onChange={(e: any) => setCustomMetric(e.target.value)}
+                        className="w-full text-xs border border-slate-250 bg-white rounded-lg px-2.5 py-1.5 font-bold text-slate-700"
+                      >
+                        <option value="alunas_ativas">Alunas Ativas</option>
+                        <option value="leads_hoje">Leads de Hoje</option>
+                        <option value="suporte_pendente">Suporte Pendente</option>
+                        <option value="receita_realizada">Faturamento Pago</option>
+                        <option value="onboarding_concluido">Onboardings OK</option>
+                        <option value="custom_static">Valor Estático (Manual)</option>
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[9px] font-extrabold text-slate-500 uppercase tracking-widest">Cor Visual</span>
+                      <select
+                        value={customColor}
+                        onChange={(e: any) => setCustomColor(e.target.value)}
+                        className="w-full text-xs border border-slate-250 bg-white rounded-lg px-2.5 py-1.5 font-bold text-slate-700"
+                      >
+                        <option value="blue">Azul Celeste</option>
+                        <option value="orange">Laranja Quente</option>
+                        <option value="emerald">Verde Esmeralda</option>
+                        <option value="gold">Dourado / Ouro</option>
+                        <option value="purple">Púrpura Imperial</option>
+                        <option value="rose">Rosa Suave</option>
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[9px] font-extrabold text-slate-500 uppercase tracking-widest">Meta Alvo</span>
+                      <input
+                        type="number"
+                        min="1"
+                        value={customGoal}
+                        onChange={(e) => setCustomGoal(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-full text-xs font-bold border border-slate-250 bg-white rounded-lg px-2 text-center py-1.5"
+                      />
+                    </div>
+
+                    {customMetric === 'custom_static' && (
+                      <>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[9px] font-extrabold text-slate-500 uppercase tracking-widest">Valor Atual</span>
+                          <input
+                            type="number"
+                            value={customVal}
+                            onChange={(e) => setCustomVal(parseInt(e.target.value) || 0)}
+                            className="w-full text-xs font-bold border border-slate-250 bg-white rounded-lg px-2 text-center py-1.5"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[9px] font-extrabold text-slate-500 uppercase tracking-widest">Sufixo Unit</span>
+                          <input
+                            type="text"
+                            placeholder="ex: % ou R$"
+                            value={customUnit}
+                            onChange={(e) => setCustomUnit(e.target.value)}
+                            className="w-full text-xs border border-slate-250 bg-white rounded-lg px-2 py-1.5"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    <div className="col-span-1 sm:col-span-2 md:col-span-4 lg:col-span-1">
+                      <button
+                        type="submit"
+                        className="w-full py-1.5 px-3.5 bg-slate-900 text-white rounded-lg font-bold text-xs hover:bg-[#0A192F] transition-all flex items-center justify-center gap-1 cursor-pointer select-none"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Criar widget
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* Configured and Pinned Widgets Grid Display */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {widgets.filter((w) => w.pinned).length === 0 ? (
+                <div className="col-span-full border border-dashed border-slate-300 p-8 rounded-xl text-center bg-white space-y-2">
+                  <Pin className="w-8 h-8 text-slate-350 mx-auto" />
+                  <p className="text-sm font-bold text-slate-700">Seu mural está sem métricas rápidas fixadas.</p>
+                  <p className="text-xs text-slate-500">Clique em <strong className="text-[#0A192F]">"Personalizar Painel"</strong> no canto superior direito para fixar alunas, faturamento ou criar indicadores manuais!</p>
+                </div>
+              ) : (
+                widgets.filter((w) => w.pinned).map((w, index) => {
+                  const currentValue = getWidgetValue(w.metricType, w.customValue);
+                  const isGoalAchieved = currentValue >= w.targetGoal;
+                  const pct = Math.min(100, Math.round((currentValue / w.targetGoal) * 100)) || 0;
+
+                  // Render-theme mappings
+                  const style = {
+                    blue: {
+                      border: "border-sky-200/85 bg-sky-50/15 hover:border-sky-300 hover:shadow-sky-500/5",
+                      text: "text-sky-850",
+                      badge: "bg-sky-100/90 text-sky-800 border-sky-300",
+                      progressTrack: "bg-sky-100",
+                      progressBar: "bg-sky-500",
+                      glowClass: "shadow-xs hover:shadow-sm"
+                    },
+                    emerald: {
+                      border: "border-emerald-250/80 bg-emerald-50/10 hover:border-emerald-300 hover:shadow-emerald-500/5",
+                      text: "text-emerald-850",
+                      badge: "bg-emerald-100/90 text-emerald-800 border-emerald-300",
+                      progressTrack: "bg-emerald-100",
+                      progressBar: "bg-emerald-500",
+                      glowClass: "shadow-xs hover:shadow-sm"
+                    },
+                    orange: {
+                      border: "border-orange-250/80 bg-orange-50/10 hover:border-orange-350 hover:shadow-orange-500/5",
+                      text: "text-orange-900",
+                      badge: "bg-orange-100/90 text-orange-850 border-orange-300",
+                      progressTrack: "bg-orange-100",
+                      progressBar: "bg-orange-500",
+                      glowClass: "shadow-xs hover:shadow-sm"
+                    },
+                    gold: {
+                      border: "border-amber-250/80 bg-amber-50/10 hover:border-amber-350 hover:shadow-amber-500/5",
+                      text: "text-amber-900",
+                      badge: "bg-amber-100/95 text-amber-850 border-amber-350",
+                      progressTrack: "bg-amber-100",
+                      progressBar: "bg-amber-500",
+                      glowClass: "shadow-xs hover:shadow-sm"
+                    },
+                    purple: {
+                      border: "border-purple-200/85 bg-purple-50/15 hover:border-purple-300 hover:shadow-purple-500/5",
+                      text: "text-purple-850",
+                      badge: "bg-purple-100/90 text-purple-800 border-purple-300",
+                      progressTrack: "bg-purple-100",
+                      progressBar: "bg-purple-500",
+                      glowClass: "shadow-xs hover:shadow-sm"
+                    },
+                    rose: {
+                      border: "border-rose-200/85 bg-rose-50/15 hover:border-rose-300 hover:shadow-rose-500/5",
+                      text: "text-rose-850",
+                      badge: "bg-rose-100/90 text-rose-800 border-rose-300",
+                      progressTrack: "bg-rose-100",
+                      progressBar: "bg-rose-500",
+                      glowClass: "shadow-xs hover:shadow-sm"
+                    }
+                  }[w.color];
+
+                  return (
+                    <motion.div 
+                      key={w.id} 
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.35, ease: "easeOut", delay: index * 0.05 }}
+                      className={cn(
+                        "rounded-xl border p-5 transition-all text-left flex flex-col justify-between h-48 bg-white shadow-xs select-none",
+                        style.border,
+                        style.glowClass
+                      )}
+                    >
+                      {/* Top Header */}
+                      <div>
+                        <div className="flex justify-between items-start gap-1">
+                          <span className={cn("text-[10px] font-black uppercase tracking-wider block truncate", style.text)}>
+                            {w.title}
+                          </span>
+                          
+                          {isGoalAchieved ? (
+                            <span className="flex items-center gap-0.5 bg-emerald-50 text-emerald-800 border border-emerald-250 font-bold text-[8px] uppercase tracking-wider px-1.5 py-0.5 rounded-full select-none shadow-xs animate-bounce">
+                              <CheckCircle2 className="w-2.5 h-2.5 shrink-0 text-emerald-600" /> Meta OK
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-0.5 bg-slate-50 text-slate-500 border border-slate-200 font-bold text-[8px] uppercase tracking-wider px-1.5 py-0.5 rounded-full select-none">
+                              Pendente
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Large Metric Display with Icon */}
+                        <div className="flex items-baseline justify-between gap-1.5 mt-2">
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-3xl font-black font-sans text-slate-850 tracking-tight">
+                              {w.metricType === 'receita_realizada' ? formatCurrency(currentValue).replace(',00', '').trim() : currentValue}
+                            </span>
+                            {w.customUnit && (
+                              <span className="text-sm font-bold text-slate-450 uppercase">{w.customUnit}</span>
+                            )}
+                          </div>
+                          
+                          <div className="p-2 rounded-lg bg-slate-50 border border-slate-150 text-slate-700">
+                            {w.metricType === 'alunas_ativas' && <UserCheck className="w-5 h-5 text-sky-600" />}
+                            {w.metricType === 'leads_hoje' && <Sparkles className="w-5 h-5 text-orange-500" />}
+                            {w.metricType === 'suporte_pendente' && <AlertTriangle className="w-5 h-5 text-emerald-605" />}
+                            {w.metricType === 'receita_realizada' && <CreditCard className="w-5 h-5 text-amber-550" />}
+                            {w.metricType === 'onboarding_concluido' && <CheckCircle2 className="w-5 h-5 text-purple-650" />}
+                            {w.metricType === 'custom_static' && <Award className="w-5 h-5 text-rose-550" />}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Goal progression bar and fast action buttons */}
+                      <div className="space-y-2">
+                        {/* Interactive database writes for active testing "de verdade" */}
+                        {w.metricType === 'leads_hoje' && (
+                          <button
+                            type="button"
+                            onClick={handleQuickAddLead}
+                            disabled={quickAddLeadLoading}
+                            className="w-full h-7 py-1 px-2.5 text-[9px] uppercase tracking-wider font-extrabold bg-[#0A192F] text-amber-400 hover:text-white hover:bg-[#152e54] disabled:opacity-50 transition-all rounded flex items-center justify-center gap-1 shadow-xs cursor-pointer select-none"
+                          >
+                            {quickAddLeadLoading ? (
+                              <>
+                                <Loader2 className="w-2.5 h-2.5 animate-spin shrink-0" />
+                                Gravando no banco...
+                              </>
+                            ) : (
+                              <>
+                                <PlusCircle className="w-2.5 h-2.5 shrink-0 animate-pulse text-amber-400" />
+                                Ingressar Lead de Hoje (Real)
+                              </>
+                            )}
+                          </button>
+                        )}
+
+                        {w.metricType === 'alunas_ativas' && (
+                          <button
+                            type="button"
+                            onClick={handleQuickAddStudent}
+                            disabled={quickAddStudentLoading}
+                            className="w-full h-7 py-1 px-2.5 text-[9px] uppercase tracking-wider font-extrabold bg-[#0A192F] text-sky-400 hover:text-white hover:bg-[#152e54] disabled:opacity-50 transition-all rounded flex items-center justify-center gap-1 shadow-xs cursor-pointer select-none"
+                          >
+                            {quickAddStudentLoading ? (
+                              <>
+                                <Loader2 className="w-2.5 h-2.5 animate-spin shrink-0" />
+                                Inserindo matrícula...
+                              </>
+                            ) : (
+                              <>
+                                <PlusCircle className="w-2.5 h-2.5 shrink-0 animate-pulse text-sky-400" />
+                                Inserir Matrícula Real
+                              </>
+                            )}
+                          </button>
+                        )}
+
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-center text-[10px] font-bold text-slate-500">
+                            <span>Progresso Real</span>
+                            <span>{pct}% (Alvo: {w.metricType === 'receita_realizada' ? formatCurrency(w.targetGoal).replace(',00', '') : w.targetGoal})</span>
+                          </div>
+                          
+                          <div className={cn("w-full h-1.5 rounded-full overflow-hidden", style.progressTrack)}>
+                            <div 
+                              className={cn("h-full rounded-full transition-all duration-300", style.progressBar)} 
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
           {/* "Resumo Mensal" Section */}
           <div className="bg-white p-6 rounded-2xl border border-slate-150 shadow-md text-left space-y-4">
             <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 border-b border-slate-100 pb-4">
@@ -948,9 +1745,12 @@ export function Dashboard({ selectedProfile }: { selectedProfile?: string | null
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {recados.map((rec) => (
-                  <div 
+                {recados.map((rec, index) => (
+                  <motion.div 
                     key={rec.id}
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.35, ease: "easeOut", delay: index * 0.04 }}
                     className={cn(
                       "p-5 rounded-xl border border-dashed shadow-sm transition-all relative flex flex-col justify-between group",
                       getPostItBg(rec.descricao || 'yellow')
@@ -976,7 +1776,7 @@ export function Dashboard({ selectedProfile }: { selectedProfile?: string | null
                       <span className="font-bold uppercase tracking-wider">Aviso Equipe</span>
                       <span>Mural Geral</span>
                     </div>
-                  </div>
+                  </motion.div>
                 ))}
                 
                 {recados.length === 0 && (
@@ -1521,6 +2321,431 @@ export function Dashboard({ selectedProfile }: { selectedProfile?: string | null
         </div>
       )}
 
+      {dashboardTab === 'alertas' && (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-[#0A192F] to-[#1D4E89] text-white p-6 rounded-2xl shadow-lg relative overflow-hidden">
+            <div className="absolute right-0 bottom-0 top-0 opacity-10 pointer-events-none w-1/3 flex items-center justify-center text-right">
+              <ShieldAlert className="w-64 h-64" />
+            </div>
+            <div className="space-y-2 text-left relative z-10">
+              <span className="p-1 px-1.5 bg-[#D4AF37]/20 border border-[#D4AF37]/45 rounded text-[9px] font-extrabold uppercase tracking-widest text-[#D4AF37]">
+                Linha de Frente Corporativa & Governança
+              </span>
+              <h2 className="text-2xl font-black font-sans leading-none mt-1">
+                Central de Processos & Alertas Ativos
+              </h2>
+              <p className="text-slate-300 text-xs md:text-sm max-w-3xl leading-relaxed">
+                Supervisione datas limite de entrega no Suporte, datas de follow-up em Leads comerciais e parcelas pendentes com vencimentos iminentes no Financeiro.
+              </p>
+            </div>
+          </div>
+
+          {/* Cards de Métricas Rápidas */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <motion.div 
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, ease: "easeOut", delay: 0.0 }}
+              className="p-5 rounded-2xl bg-white border border-slate-200 flex items-center justify-between shadow-xs"
+            >
+              <div className="space-y-1 text-left">
+                <span className="text-[10px] font-bold text-slate-400 uppercase font-mono">Alertas Totais Ativos</span>
+                <p className="text-2xl font-black text-[#0A192F]">{alertStats.totalAlertas}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-50 text-slate-800 border border-slate-150">
+                <Activity className="w-5 h-5" />
+              </div>
+            </motion.div>
+
+            <motion.div 
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, ease: "easeOut", delay: 0.08 }}
+              className="p-5 rounded-2xl bg-white border border-slate-200 flex items-center justify-between shadow-xs"
+            >
+              <div className="space-y-1 text-left">
+                <span className="text-[10px] font-bold text-slate-400 uppercase font-mono">Vencidos / Atrasados</span>
+                <p className="text-2xl font-black text-rose-600">{alertStats.totalVencidos}</p>
+              </div>
+              <div className={cn("p-3 rounded-xl", alertStats.totalVencidos > 0 ? "bg-rose-50 text-rose-600 border border-rose-150 animate-pulse" : "bg-slate-50 text-slate-550 border border-slate-150")}>
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+            </motion.div>
+
+            <motion.div 
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, ease: "easeOut", delay: 0.16 }}
+              className="p-5 rounded-2xl bg-white border border-slate-200 flex items-center justify-between shadow-xs"
+            >
+              <div className="space-y-1 text-left">
+                <span className="text-[10px] font-bold text-slate-400 uppercase font-mono">Dentre os Próximos Dias</span>
+                <p className="text-2xl font-black text-amber-600">{alertStats.totalAlertas - alertStats.totalVencidos}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-amber-50 text-amber-600 border border-amber-150">
+                <Target className="w-5 h-5" />
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Filtros de Categoria & Tempo */}
+          <div className="bg-slate-50/65 border border-slate-200 p-4 rounded-2xl flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+            {/* Categorias */}
+            <div className="flex flex-wrap gap-2 text-left">
+              <button
+                onClick={() => setAlertFilterCategory('all')}
+                className={cn(
+                  "px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer border select-none",
+                  alertFilterCategory === 'all'
+                    ? "bg-[#0A192F] text-white border-[#0A192F]"
+                    : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                )}
+              >
+                Todos os Alertas
+              </button>
+              <button
+                onClick={() => setAlertFilterCategory('tarefas')}
+                className={cn(
+                  "px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer border select-none flex items-center gap-1.5",
+                  alertFilterCategory === 'tarefas'
+                    ? "bg-[#0A192F] text-white border-[#0A192F]"
+                    : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                )}
+              >
+                <CheckSquare className="w-3.5 h-3.5 text-blue-500" />
+                Tarefas Internas ({alertStats.tarefas.length})
+              </button>
+              <button
+                onClick={() => setAlertFilterCategory('leads')}
+                className={cn(
+                  "px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer border select-none flex items-center gap-1.5",
+                  alertFilterCategory === 'leads'
+                    ? "bg-[#0A192F] text-white border-[#0A192F]"
+                    : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                )}
+              >
+                <User className="w-3.5 h-3.5 text-orange-500" />
+                Follow-ups de Leads ({alertStats.leads.length})
+              </button>
+              <button
+                onClick={() => setAlertFilterCategory('pagamentos')}
+                className={cn(
+                  "px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer border select-none flex items-center gap-1.5",
+                  alertFilterCategory === 'pagamentos'
+                    ? "bg-[#0A192F] text-white border-[#0A192F]"
+                    : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                )}
+              >
+                <CreditCard className="w-3.5 h-3.5 text-emerald-500" />
+                Pagamentos / Alunas ({alertStats.pagamentos.length})
+              </button>
+            </div>
+
+            {/* Tempo */}
+            <div className="flex gap-2 bg-white p-1 rounded-xl border border-slate-200 shrink-0">
+              <button
+                onClick={() => setAlertFilterTime('all')}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-bold transition select-none cursor-pointer",
+                  alertFilterTime === 'all'
+                    ? "bg-slate-100 text-slate-800 font-extrabold"
+                    : "text-slate-500 hover:text-slate-800"
+                )}
+              >
+                Todas as Datas
+              </button>
+              <button
+                onClick={() => setAlertFilterTime('vencidos')}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-bold transition select-none cursor-pointer",
+                  alertFilterTime === 'vencidos'
+                    ? "bg-rose-100 text-rose-800 font-extrabold"
+                    : "text-slate-500 hover:text-rose-600"
+                )}
+              >
+                Apenas Vencidos ({alertStats.totalVencidos})
+              </button>
+              <button
+                onClick={() => setAlertFilterTime('proximos')}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-bold transition select-none cursor-pointer",
+                  alertFilterTime === 'proximos'
+                    ? "bg-amber-100 text-amber-800 font-extrabold"
+                    : "text-slate-500 hover:text-amber-750"
+                )}
+              >
+                Vencimento Próximo
+              </button>
+            </div>
+          </div>
+
+          {/* Central de Alertas Renderizada */}
+          <div className="grid grid-cols-1 lg:grid-cols-1 gap-6 text-left">
+            {/* COMPOSIÇÃO DOS ALERTA CARDS FILTRADOS */}
+            {(() => {
+              // Filtragem e unificação de listas
+              let combinedList: any[] = [];
+
+              if (alertFilterCategory === 'all' || alertFilterCategory === 'tarefas') {
+                alertStats.tarefas.forEach(t => combinedList.push({ ...t, alertType: 'tarefa' }));
+              }
+              if (alertFilterCategory === 'all' || alertFilterCategory === 'leads') {
+                alertStats.leads.forEach(l => combinedList.push({ ...l, alertType: 'lead' }));
+              }
+              if (alertFilterCategory === 'all' || alertFilterCategory === 'pagamentos') {
+                alertStats.pagamentos.forEach(p => combinedList.push({ ...p, alertType: 'pagamento' }));
+              }
+
+              // Aplicar filtro de Tempo
+              if (alertFilterTime === 'vencidos') {
+                combinedList = combinedList.filter(item => item.isOverdue);
+              } else if (alertFilterTime === 'proximos') {
+                combinedList = combinedList.filter(item => item.isNear);
+              }
+
+              // Ordenar: Vencidos primeiro, depois por proximidade crescente
+              combinedList.sort((a, b) => {
+                if (a.isOverdue && !b.isOverdue) return -1;
+                if (!a.isOverdue && b.isOverdue) return 1;
+                return (a.daysDiff || 999) - (b.daysDiff || 999);
+              });
+
+              if (combinedList.length === 0) {
+                return (
+                  <div className="text-center py-16 bg-white border border-slate-200/80 rounded-2xl max-w-full shadow-2xs space-y-3">
+                    <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto" />
+                    <div>
+                      <h4 className="font-extrabold text-[#0A192F]">Nenhum Alerta Pendente</h4>
+                      <p className="text-slate-400 text-xs mt-1">Ótimo trabalho! Todos os processos desta combinação encontram-se rigorosamente em dia.</p>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-4">
+                  {combinedList.map((item, idx) => {
+                    const isOverdue = item.isOverdue;
+                    const dateDisplay = item.alertType === 'tarefa' ? item.prazo : (item.alertType === 'lead' ? item.proximoContato : item.vencimento);
+
+                    return (
+                      <div
+                        key={idx}
+                        className={cn(
+                          "bg-white border rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-6 transition shadow-2xs hover:shadow-xs",
+                          isOverdue 
+                            ? "border-rose-150 hover:border-rose-350 bg-rose-50/5" 
+                            : "border-slate-200 hover:border-slate-350"
+                        )}
+                      >
+                        {/* Detalhes do Alerta */}
+                        <div className="flex items-start gap-3.5 text-left">
+                          <div className={cn(
+                            "p-3 rounded-xl shrink-0 border mt-1",
+                            item.alertType === 'tarefa' ? "bg-blue-50 text-blue-600 border-blue-150" :
+                            item.alertType === 'lead' ? "bg-orange-50 text-orange-600 border-orange-150" :
+                            "bg-emerald-50 text-emerald-600 border-emerald-150"
+                          )}>
+                            {item.alertType === 'tarefa' && <CheckSquare className="w-5 h-5" />}
+                            {item.alertType === 'lead' && <User className="w-5 h-5" />}
+                            {item.alertType === 'pagamento' && <CreditCard className="w-5 h-5" />}
+                          </div>
+
+                          <div className="space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              {/* Categoria Badge */}
+                              <span className={cn(
+                                "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border",
+                                item.alertType === 'tarefa' ? "bg-blue-100/55 text-blue-850 border-blue-200" :
+                                item.alertType === 'lead' ? "bg-orange-100/55 text-orange-850 border-orange-200" :
+                                "bg-emerald-100/55 text-emerald-850 border-emerald-200"
+                              )}>
+                                {item.alertType === 'tarefa' ? 'Tarefa Interna' :
+                                 item.alertType === 'lead' ? 'Leads & Vendas' :
+                                 'Cobrança Aluno'}
+                              </span>
+
+                              {/* Vencido vs Próximo Badge */}
+                              {isOverdue ? (
+                                <span className="bg-rose-100 hover:bg-rose-150 text-rose-800 border border-rose-250 font-black rounded px-1.5 py-0.5 text-[8px] uppercase tracking-wider select-none animate-pulse">
+                                  🚨 Vencido / Atrasado
+                                </span>
+                              ) : (
+                                <span className="bg-amber-100 text-amber-900 border border-amber-250 font-black rounded px-1.5 py-0.5 text-[8px] uppercase tracking-wider select-none">
+                                  📅 Próximo ({item.daysDiff === 0 ? 'Hoje' : `em ${item.daysDiff} dias`})
+                                </span>
+                              )}
+                            </div>
+
+                            <h3 className="text-sm font-extrabold text-[#0A192F] leading-tight select-all">
+                              {item.alertType === 'tarefa' && (item.titulo || 'Tarefa sem nome')}
+                              {item.alertType === 'lead' && `Follow-up do Lead: ${item.nome}`}
+                              {item.alertType === 'pagamento' && `Vencimento Parcela: ${item.aluno}`}
+                            </h3>
+
+                            <div className="flex flex-wrap items-center gap-y-1 gap-x-4 text-xs text-slate-500 font-semibold font-sans">
+                              {item.alertType === 'tarefa' && (
+                                <>
+                                  <span>Responsável: <strong className="text-slate-800 uppercase font-bold">{item.responsavel || 'Equipe'}</strong></span>
+                                  <span>Prazo Limite: <strong className="text-amber-800 font-semibold">{dateDisplay ? new Date(dateDisplay + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}</strong></span>
+                                </>
+                              )}
+                              {item.alertType === 'lead' && (
+                                <>
+                                  <span>E-mail: <strong className="text-slate-805 select-all">{item.email || 'Não informado'}</strong></span>
+                                  <span>Telefone: <strong className="text-slate-805 select-all">{item.telefone || 'Não informado'}</strong></span>
+                                  <span>Contato: <strong className="text-rose-700 font-bold">{dateDisplay ? new Date(dateDisplay + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}</strong></span>
+                                </>
+                              )}
+                              {item.alertType === 'pagamento' && (
+                                <>
+                                  <span>Curso: <strong className="text-slate-800 font-bold">{item.formacao || 'Não identificado'}</strong></span>
+                                  <span>Valor Parcela: <strong className="text-emerald-700 font-extrabold">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseFloat(item.valorCombinado) || 0)}</strong></span>
+                                  <span>Data Limite: <strong className="text-amber-850 font-bold">{dateDisplay ? new Date(dateDisplay + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}</strong></span>
+                                </>
+                              )}
+                            </div>
+
+                            {/* Descrições adicionais */}
+                            {item.descricao && (
+                              <p className="text-[11px] text-slate-450 leading-relaxed bg-slate-50 p-2 rounded-lg border border-slate-100 max-w-2xl mt-1 select-text">
+                                {item.descricao}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Botões de Ações Rápidas */}
+                        <div className="flex items-center gap-2 flex-wrap shrink-0">
+                          {item.alertType === 'tarefa' && (
+                            <>
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    await updateSingleField('tarefas_suporte', item.id, { status: 'concluido' });
+                                    alert(`Sucesso: Tarefa "${item.titulo || ''}" marcada como finalizada e salva no Firestore.`);
+                                  } catch (e: any) {
+                                    alert("Erro ao marcar tarefa como concluída: " + e.message);
+                                  }
+                                }}
+                                className="bg-[#0A192F] hover:bg-emerald-600 hover:text-white text-white font-extrabold text-[10px] uppercase tracking-wider py-2 px-3.5 rounded-lg transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
+                              >
+                                <Check className="w-3 h-3 shrink-0" />
+                                Concluir Tarefa
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const nextDays = new Date();
+                                    nextDays.setDate(nextDays.getDate() + 3);
+                                    const nextDaysStr = nextDays.toISOString().split('T')[0];
+                                    await updateSingleField('tarefas_suporte', item.id, { prazo: nextDaysStr });
+                                    alert(`Sucesso: Prazo da tarefa adiado para ${new Date(nextDaysStr + 'T12:00:00').toLocaleDateString('pt-BR')}.`);
+                                  } catch (e: any) {
+                                    alert("Erro ao atualizar data da tarefa: " + e.message);
+                                  }
+                                }}
+                                className="bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 font-extrabold text-[10px] uppercase tracking-wider py-2 px-3 rounded-lg transition border border-slate-200 cursor-pointer"
+                              >
+                                Adiar +3 dias
+                              </button>
+                            </>
+                          )}
+
+                          {item.alertType === 'lead' && (
+                            <>
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const nextWeek = new Date();
+                                    nextWeek.setDate(nextWeek.getDate() + 7);
+                                    const nextWeekStr = nextWeek.toISOString().split('T')[0];
+                                    await updateSingleField('pessoas', item.id, { proximoContato: nextWeekStr });
+                                    alert(`Sucesso: Próximo contato do lead postergado para ${new Date(nextWeekStr + 'T12:00:00').toLocaleDateString('pt-BR')}.`);
+                                  } catch (e: any) {
+                                    alert("Erro ao atualizar lead: " + e.message);
+                                  }
+                                }}
+                                className="bg-[#D4AF37]/15 border border-[#D4AF37]/45 text-amber-950 font-extrabold text-[10px] uppercase tracking-wider py-2 px-3.5 rounded-lg hover:bg-[#D4AF37] hover:text-slate-950 transition-all cursor-pointer shadow-2xs"
+                              >
+                                Adiar +7 dias
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  if (confirm(`Deseja mesmo colocar o lead ${item.nome} como perdido?`)) {
+                                    try {
+                                      await updateSingleField('pessoas', item.id, { status: 'perdido' });
+                                      alert(`O lead "${item.nome}" foi classificado como Perdido.`);
+                                    } catch (e: any) {
+                                      alert("Erro ao catalogar lead perdido: " + e.message);
+                                    }
+                                  }
+                                }}
+                                className="bg-slate-50 hover:bg-rose-50 hover:text-rose-700 text-slate-500 font-extrabold text-[10px] uppercase tracking-wider py-2 px-3 rounded-lg transition border border-slate-200 cursor-pointer"
+                              >
+                                Descartar Lead
+                              </button>
+                            </>
+                          )}
+
+                          {item.alertType === 'pagamento' && (
+                            <>
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    await updateSingleField('pagamentos', item.id, { status: 'pago' });
+                                    alert(`Incrível! Mensalidade de ${item.aluno} liquidada com status PAGO e gravada Definitivo.`);
+                                  } catch (e: any) {
+                                    alert("Erro ao marcar pagamento: " + e.message);
+                                  }
+                                }}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[10px] uppercase tracking-wider py-2 px-3.5 rounded-lg transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
+                              >
+                                <Check className="w-3 h-3 shrink-0" />
+                                Dar Baixa / Pago
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const valorStr = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseFloat(item.valorCombinado) || 0);
+                                  const rawMsg = `Olá, ${item.aluno}! Tudo bem?\n\nPassando para lembrar que identificamos em nossa base o vencimento de sua parcela de ${valorStr} (com vencimento em ${item.vencimento ? new Date(item.vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}) referente à formação "${item.formacao || 'Mentoria'}".\n\nCaso já queira adiantar ou transferir, segue Chave PIX CNPJ do Instituto: 51.533.488/0001-09. Se precisar do link de cartão ou suporte me avise!\n\nMuito obrigada pela atenção!`;
+                                  navigator.clipboard.writeText(rawMsg);
+                                  alert("Mensagem de cobrança personalizada copiada para a área de transferência! Envie diretamente no WhatsApp.");
+                                }}
+                                className="bg-slate-50 hover:bg-slate-100 text-[#0A192F] font-extrabold text-[10px] uppercase tracking-wider py-2 px-3 rounded-lg transition border border-slate-200 cursor-pointer flex items-center gap-1.5"
+                              >
+                                <Send className="w-3 h-3 text-emerald-500 shrink-0" />
+                                Copiar WhatsApp
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const futureDate = new Date();
+                                    futureDate.setDate(futureDate.getDate() + 15);
+                                    const futureDateStr = futureDate.toISOString().split('T')[0];
+                                    await updateSingleField('pagamentos', item.id, { vencimento: futureDateStr });
+                                    alert(`Vencimento postergado para ${new Date(futureDateStr + 'T12:00:00').toLocaleDateString('pt-BR')}.`);
+                                  } catch (e: any) {
+                                    alert("Erro ao prorrogar pagamento: " + e.message);
+                                  }
+                                }}
+                                className="text-slate-400 hover:text-slate-700 font-extrabold text-[10px] uppercase tracking-wider py-2 px-2.5 rounded-lg transition hover:bg-slate-50 cursor-pointer"
+                              >
+                                +15 dias
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
       {/* --- BLOCO EXCLUSIVO DA LIANA: RELATÓRIOS DE PERFORMANCE E AUDITORIA --- */}
       {isLiana && dashboardTab === 'performance' && (
         <div className="space-y-8 animate-in fade-in duration-300">
@@ -1550,7 +2775,17 @@ export function Dashboard({ selectedProfile }: { selectedProfile?: string | null
           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="text-left">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Filtro de Período</h3>
-              <p className="text-xs font-semibold text-slate-700 mt-0.5">Métricas calculadas do dia: {performancePeriod === 'hoje' ? 'Hoje (04/06/2026)' : performancePeriod === 'ontem' ? 'Ontem (03/06/2026)' : performancePeriod === 'mes' ? 'Junho / 2026' : 'Todo o Histórico'}</p>
+              <p className="text-xs font-semibold text-slate-700 mt-0.5">
+                Métricas calculadas do dia: {
+                  performancePeriod === 'hoje' 
+                    ? `Hoje (${new Date().toLocaleDateString('pt-BR')})` 
+                    : performancePeriod === 'ontem' 
+                      ? `Ontem (${(() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toLocaleDateString('pt-BR'); })()})` 
+                      : performancePeriod === 'mes' 
+                        ? `Este Mês (${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })})` 
+                        : 'Todo o Histórico'
+                }
+              </p>
             </div>
             <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
               <button
@@ -1632,7 +2867,12 @@ export function Dashboard({ selectedProfile }: { selectedProfile?: string | null
 
           {/* KPI Total Cards Grids */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-left">
-            <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+            <motion.div 
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, ease: "easeOut", delay: 0.0 }}
+              className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between"
+            >
               <div>
                 <p className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">Total Abordagens</p>
                 <h4 className="text-2xl font-extrabold text-[#1D4E89] mt-1">
@@ -1642,8 +2882,14 @@ export function Dashboard({ selectedProfile }: { selectedProfile?: string | null
               <div className="p-3 rounded-lg bg-blue-50 text-[#1D4E89]">
                 <UserCheck className="w-5 h-5" />
               </div>
-            </div>
-            <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+            </motion.div>
+
+            <motion.div 
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, ease: "easeOut", delay: 0.08 }}
+              className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between"
+            >
               <div>
                 <p className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">Total Follow-ups</p>
                 <h4 className="text-2xl font-extrabold text-[#EA580C] mt-1">
@@ -1653,8 +2899,14 @@ export function Dashboard({ selectedProfile }: { selectedProfile?: string | null
               <div className="p-3 rounded-lg bg-orange-50 text-[#EA580C]">
                 <MessageSquare className="w-5 h-5" />
               </div>
-            </div>
-            <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+            </motion.div>
+
+            <motion.div 
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, ease: "easeOut", delay: 0.16 }}
+              className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between"
+            >
               <div>
                 <p className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">Total Fechamentos</p>
                 <h4 className="text-2xl font-extrabold text-emerald-700 mt-1">
@@ -1664,8 +2916,14 @@ export function Dashboard({ selectedProfile }: { selectedProfile?: string | null
               <div className="p-3 rounded-lg bg-emerald-50 text-emerald-600">
                 <CreditCard className="w-5 h-5" />
               </div>
-            </div>
-            <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+            </motion.div>
+
+            <motion.div 
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, ease: "easeOut", delay: 0.24 }}
+              className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between"
+            >
               <div>
                 <p className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">Total Atendimentos</p>
                 <h4 className="text-2xl font-extrabold text-indigo-700 mt-1">
@@ -1675,7 +2933,7 @@ export function Dashboard({ selectedProfile }: { selectedProfile?: string | null
               <div className="p-3 rounded-lg bg-indigo-50 text-indigo-650">
                 <CheckSquare className="w-5 h-5" />
               </div>
-            </div>
+            </motion.div>
           </div>
 
           {/* Tabela de Relatório Detalhado por Colaboradora */}

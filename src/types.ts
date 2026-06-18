@@ -14,6 +14,12 @@ export interface ModuleSchema {
   filterFields: string[];
 }
 
+export interface Tag {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export interface AppData {
   pessoas: any[];
   turmas: any[];
@@ -23,5 +29,9 @@ export interface AppData {
   perfis: any[];
   certificados_emitidos?: any[];
   certificados_templates?: any[];
-  tags_personalizaveis?: any[];
+  tags_personalizaveis: Tag[];
+  ilgc_canais?: any[];
+  ilgc_mensagens?: any[];
+  ilgc_notificacoes?: any[];
+  allowed_emails?: any[];
 }

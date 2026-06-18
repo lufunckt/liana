@@ -6,6 +6,9 @@ import {
 } from 'lucide-react';
 import { PLANILHA_TEMPLATES, SpreadsheetTemplate, TemplateColumn } from './templates';
 import { PlanilhaGrid } from './PlanilhaGrid';
+import { useStore } from '../../store';
+import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 
 // Interface for dynamic spreadsheets
 export interface DynamicSpreadsheet {
@@ -28,6 +31,73 @@ export interface DynamicSpreadsheet {
 }
 
 export function PlanilhasModule() {
+  const { data, addSingleDocument, updateSingleField } = useStore();
+  const pessoas = data.pessoas || [];
+
+  // Synchronize dynamic spreadsheet rows directly into the unified CRM database of people
+  const syncRegistersToPessoas = async (sheetName: string, category: string, colunas: TemplateColumn[], registros: Record<string, any>[]) => {
+    if (!colunas || colunas.length === 0 || !registros || registros.length === 0) return;
+
+    const pCol = colunas.find(c => c.type === 'rel_pessoa' || c.key === 'nome' || c.key.includes('completo') || c.key.includes('aluno') || c.key.includes('lead') || c.key === 'nome_completo');
+    const telCol = colunas.find(c => c.type === 'telefone' || c.key === 'whats' || c.key.includes('whats') || c.key.includes('telefone') || c.key.includes('celular') || c.key === 'telefone_contato');
+    const emailCol = colunas.find(c => c.type === 'email' || c.key === 'email' || c.key.includes('email') || c.key.includes('mail'));
+    const statusCol = colunas.find(c => c.type === 'status' || c.key.includes('status') || c.key.includes('comercial'));
+
+    if (!pCol) return;
+
+    for (const row of registros) {
+      const rawName = String(row[pCol.key] || '').trim();
+      if (rawName && rawName.toLowerCase() !== 'sem nome' && rawName.toLowerCase() !== '') {
+        const existingPerson = pessoas.find(p => p.nome?.trim().toLowerCase() === rawName.toLowerCase());
+        const rawTel = telCol ? String(row[telCol.key] || '').trim() : '';
+        const rawEmail = emailCol ? String(row[emailCol.key] || '').trim() : '';
+        const rawStatus = statusCol ? String(row[statusCol.key] || '').trim() : '';
+        const isLead = category.toLowerCase().includes('lead') || sheetName.toLowerCase().includes('lead');
+
+        if (!existingPerson) {
+          // Create new person automatically
+          const newPerson = {
+            id: `pessoa-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            nome: rawName,
+            telefone: rawTel || 'Sem telefone',
+            email: rawEmail || 'Sem e-mail',
+            tipoPessoa: isLead ? 'lead' : 'aluna',
+            status: rawStatus || 'novo',
+            interacoes: [
+              { 
+                text: `Pessoa cadastrada automaticamente ao importar planilha: ${sheetName}`, 
+                date: new Date().toLocaleDateString('pt-BR'), 
+                type: 'system' 
+              }
+            ]
+          };
+          await addSingleDocument('pessoas', newPerson);
+        } else {
+          // Person already exists - update fields if they have changed or completed
+          let needsUpdate = false;
+          const updatedFields: Record<string, any> = {};
+
+          if (rawTel && rawTel !== 'Sem telefone' && existingPerson.telefone !== rawTel) {
+            updatedFields.telefone = rawTel;
+            needsUpdate = true;
+          }
+          if (rawEmail && rawEmail !== 'Sem e-mail' && existingPerson.email !== rawEmail) {
+            updatedFields.email = rawEmail;
+            needsUpdate = true;
+          }
+          if (rawStatus && rawStatus !== 'novo' && existingPerson.status !== rawStatus) {
+            updatedFields.status = rawStatus;
+            needsUpdate = true;
+          }
+
+          if (needsUpdate) {
+            await updateSingleField('pessoas', existingPerson.id, updatedFields);
+          }
+        }
+      }
+    }
+  };
+
   // Primary database state of sheets
   const [spreadsheets, setSpreadsheets] = useState<DynamicSpreadsheet[]>([]);
   const [selectedSheetId, setSelectedSheetId] = useState<string | null>(null);
@@ -194,27 +264,31 @@ export function PlanilhasModule() {
         finalCols = [{ key: 'nome', label: 'Nome Completo', type: 'rel_pessoa' }];
       }
     } else if (creationStyle === 'importar') {
-      // Simulate CSV upload structure
+      // Create clean, unique column keys from parsed headers
       finalCols = csvHeaders.map(h => {
         const mappedType = csvColumnMapping[h] || 'texto_curto';
         return {
-          key: h.toLowerCase().replace(/\s+/g, '_'),
+          key: h.toLowerCase().replace(/\s+/g, '_').replace(/[^\w]/g, ''),
           label: h,
           type: mappedType as any
         };
       });
 
-      // Transform simulated mock CSV rows (using the preview)
+      // Transform real CSV or Excel parsed rows
       finalRecords = csvFilePreview.slice(csvHasHeader ? 1 : 0).map(row => {
         const rec: Record<string, any> = {};
         csvHeaders.forEach((h, index) => {
-          const colKey = h.toLowerCase().replace(/\s+/g, '_');
-          let val: any = row[index] || '';
+          const colKey = h.toLowerCase().replace(/\s+/g, '_').replace(/[^\w]/g, '');
+          const rawVal = row[index] !== undefined && row[index] !== null ? row[index] : '';
+          const valStr = String(rawVal).trim();
           const mappedType = csvColumnMapping[h] || 'texto_curto';
+          
+          let val: any = valStr;
           if (mappedType === 'numero' || mappedType === 'moeda') {
-            val = Number(val.replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
+            // strip currency symbols, currency format and parse safely
+            val = Number(valStr.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0;
           } else if (mappedType === 'checkbox') {
-            val = val.toLowerCase() === 'sim' || val.toLowerCase() === 'true' || val === '1';
+            val = valStr.toLowerCase() === 'sim' || valStr.toLowerCase() === 'true' || valStr === '1' || rawVal === true;
           }
           rec[colKey] = val;
         });
@@ -242,6 +316,11 @@ export function PlanilhasModule() {
       ]
     };
 
+    // Auto-create people in single "pessoas" database when importing/building rows
+    if (finalRecords.length > 0 && finalCols.length > 0) {
+      syncRegistersToPessoas(newSheet.nome, newSheet.categoria, finalCols, finalRecords);
+    }
+
     saveSpreadsheetsState([...spreadsheets, newSheet]);
     setSelectedSheetId(newSheet.id);
     setIsWizardOpen(false);
@@ -249,7 +328,7 @@ export function PlanilhasModule() {
     setWizardStep(1);
   };
 
-  // CSV Loader Trigger Preview
+  // Real CSV & Excel Sheet Loader Trigger Preview
   const handleCSVUploadSimulate = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -257,42 +336,106 @@ export function PlanilhasModule() {
     setCsvFile(file);
     setCsvFileName(file.name);
 
-    // Provide pre-built elegant parser mock rows of typical ILG Leads or Alunos
-    const isLeadWord = file.name.toLowerCase().includes('lead');
-    let headings: string[] = [];
-    let rows: string[][] = [];
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
 
-    if (isLeadWord) {
-      headings = ['Nome Completo', 'Mailing Address', 'WhatsApp', 'Origem do Lead', 'Status Comercial'];
-      rows = [
-        ['Nome Completo', 'Mailing Address', 'WhatsApp', 'Origem do Lead', 'Status Comercial'],
-        ['Gabriela Mello', 'gabi.m@yahoo.com', '5511944445555', 'Anúncio Pago', 'Novo Lead'],
-        ['Lucas Berton', 'lucas.berton@outlook.com', '5511922221111', 'Instagram', 'Sem Interesse'],
-        ['Sofia Loren', 'sofia@lorencorp.com', '5521911112222', 'Indicados', 'Agendado']
-      ];
+    if (fileExtension === 'csv') {
+      // Use PapaParse to parse real CSV files
+      Papa.parse(file, {
+        skipEmptyLines: 'greedy',
+        complete: (results) => {
+          const rawRows = results.data as string[][];
+          const parsedRows = rawRows.filter(row => row && row.some(cell => cell !== null && cell !== undefined && String(cell).trim() !== ''));
+          
+          if (parsedRows.length === 0) {
+            alert('O arquivo CSV parece estar vazio.');
+            return;
+          }
+
+          const headings = parsedRows[0].map(h => h ? String(h).trim() : '');
+          setCsvHeaders(headings);
+          setCsvFilePreview(parsedRows);
+
+          // Auto-map column data types
+          const autoMap: Record<string, string> = {};
+          headings.forEach(h => {
+            const hLower = h.toLowerCase();
+            if (hLower.includes('nome') || hLower.includes('ficha') || hLower.includes('aluno') || hLower.includes('lead') || hLower.includes('cliente')) {
+              autoMap[h] = 'rel_pessoa';
+            } else if (hLower.includes('whats') || hLower.includes('tel') || hLower.includes('cel') || hLower.includes('fone') || hLower.includes('phone')) {
+              autoMap[h] = 'telefone';
+            } else if (hLower.includes('mail') || hLower.includes('correo') || hLower.includes('endereço')) {
+              autoMap[h] = 'email';
+            } else if (hLower.includes('status') || hLower.includes('etapa') || hLower.includes('comercial')) {
+              autoMap[h] = 'status';
+            } else if (hLower.includes('data') || hLower.includes('venc') || hLower.includes('date') || hLower.includes('criado')) {
+              autoMap[h] = 'data';
+            } else {
+              autoMap[h] = 'texto_curto';
+            }
+          });
+          setCsvColumnMapping(autoMap);
+        },
+        error: (error) => {
+          console.error('Erro ao ler CSV:', error);
+          alert('Erro ao processar as informações do arquivo CSV.');
+        }
+      });
+    } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
+      // Use SheetJS (xlsx) for real Microsoft Excel sheets
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        try {
+          const data = evt.target?.result;
+          if (!data) return;
+          const workbook = XLSX.read(data, { type: 'binary' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          
+          // Parse rows as raw 2D arrays
+          const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+          
+          // Clean completely blank lines and ensure values are formatted nicely
+          const parsedRows = rawRows
+            .filter(row => row && row.some(cell => cell !== null && cell !== undefined && String(cell).trim() !== ''))
+            .map(row => row.map(cell => cell !== null && cell !== undefined ? String(cell).trim() : ''));
+
+          if (parsedRows.length === 0) {
+            alert('O arquivo de planilha Excel parece estar vazio.');
+            return;
+          }
+
+          const headings = parsedRows[0];
+          setCsvHeaders(headings);
+          setCsvFilePreview(parsedRows);
+
+          // Auto-map column data types
+          const autoMap: Record<string, string> = {};
+          headings.forEach(h => {
+            const hLower = h.toLowerCase();
+            if (hLower.includes('nome') || hLower.includes('ficha') || hLower.includes('aluno') || hLower.includes('lead') || hLower.includes('cliente')) {
+              autoMap[h] = 'rel_pessoa';
+            } else if (hLower.includes('whats') || hLower.includes('tel') || hLower.includes('cel') || hLower.includes('fone') || hLower.includes('phone')) {
+              autoMap[h] = 'telefone';
+            } else if (hLower.includes('mail') || hLower.includes('correo') || hLower.includes('endereço')) {
+              autoMap[h] = 'email';
+            } else if (hLower.includes('status') || hLower.includes('etapa') || hLower.includes('comercial')) {
+              autoMap[h] = 'status';
+            } else if (hLower.includes('data') || hLower.includes('venc') || hLower.includes('date') || hLower.includes('criado')) {
+              autoMap[h] = 'data';
+            } else {
+              autoMap[h] = 'texto_curto';
+            }
+          });
+          setCsvColumnMapping(autoMap);
+        } catch (error) {
+          console.error('Erro ao ler Excel:', error);
+          alert('Erro ao processar as informações do arquivo Excel.');
+        }
+      };
+      reader.readAsBinaryString(file);
     } else {
-      headings = ['Ficha Aluna', 'WhatsApp', 'E-mail principal', 'Formação ou Produto', 'Turma Relacionada'];
-      rows = [
-        ['Ficha Aluna', 'WhatsApp', 'E-mail principal', 'Formação ou Produto', 'Turma Relacionada'],
-        ['Beatriz Nogueira', '5511955556666', 'beatriz.nog@uol.com', 'Formação Executiva & Compliance', 'Turma A'],
-        ['Juliana Ramos', '5511966667777', 'juliaramos@gmail.com', 'Formação Líder / Liderança', 'Turma B']
-      ];
+      alert('Formato de arquivo não suportado. Envie um arquivo Excel (.xlsx, .xls) ou CSV.');
     }
-
-    setCsvHeaders(headings);
-    setCsvFilePreview(rows);
-    
-    // Auto map values
-    const autoMap: Record<string, string> = {};
-    headings.forEach(h => {
-      if (h.includes('Nome') || h.includes('Ficha')) autoMap[h] = 'rel_pessoa';
-      else if (h.includes('WhatsApp') || h.includes('Telefone')) autoMap[h] = 'telefone';
-      else if (h.includes('E-mail') || h.includes('Mail')) autoMap[h] = 'email';
-      else if (h.includes('Status')) autoMap[h] = 'status';
-      else if (h.includes('Vencimento') || h.includes('Data')) autoMap[h] = 'data';
-      else autoMap[h] = 'texto_curto';
-    });
-    setCsvColumnMapping(autoMap);
   };
 
   // Add rule submit
@@ -340,6 +483,11 @@ export function PlanilhasModule() {
   };
 
   const handleUpdateRegs = (sheetId: string, newRegs: Record<string, any>[]) => {
+    const sheet = spreadsheets.find(s => s.id === sheetId);
+    if (sheet) {
+      syncRegistersToPessoas(sheet.nome, sheet.categoria, sheet.colunas, newRegs);
+    }
+
     const updated = spreadsheets.map(s => {
       if (s.id === sheetId) {
         return { 
@@ -878,27 +1026,27 @@ export function PlanilhasModule() {
                     </div>
                   )}
 
-                  {/* If importing CSV: show upload fields */}
+                  {/* If importing CSV/Excel: show upload fields */}
                   {creationStyle === 'importar' && (
                     <div className="space-y-3.5">
-                      <div className="border-2 border-dashed border-slate-300 hover:border-indigo-400 rounded-xl p-6 text-center transition">
+                      <div className="border-2 border-dashed border-slate-300 hover:border-[#0A192F] rounded-xl p-6 text-center transition">
                         <Upload className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                        <span className="text-[11px] font-extrabold text-slate-700 uppercase block mb-1">Upload de CSV de Leads/Alunos</span>
+                        <span className="text-[11px] font-extrabold text-slate-700 uppercase block mb-1">Importar Planilha Excel ou CSV</span>
                         <input 
                           type="file" 
-                          accept=".csv"
+                          accept=".csv, .xlsx, .xls"
                           onChange={handleCSVUploadSimulate}
                           className="opacity-0 absolute w-0 h-0"
                           id="csv_picker_wizard"
                         />
                         <label 
                           htmlFor="csv_picker_wizard"
-                          className="px-4 py-1.5 bg-indigo-650 text-white rounded text-xs font-bold cursor-pointer inline-block"
+                          className="px-4 py-1.5 bg-[#0A192F] hover:bg-[#D4AF37] text-white hover:text-[#0A192F] rounded text-xs font-bold cursor-pointer inline-block transition-colors"
                         >
-                          Escolher arquivo CSV
+                          Escolher arquivo (Excel / CSV)
                         </label>
                         {csvFileName && (
-                          <p className="text-[10px] text-indigo-700 font-bold mt-2">Mapeado: {csvFileName}</p>
+                          <p className="text-[10px] text-emerald-600 font-bold mt-2 font-sans">Mapeado com sucesso: {csvFileName}</p>
                         )}
                       </div>
 

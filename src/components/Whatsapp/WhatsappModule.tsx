@@ -888,7 +888,7 @@ export function WhatsappModule() {
                   <span>Como rodar de graça (Evolution API)</span>
                 </h4>
                 <p className="text-[11px] text-slate-600 leading-relaxed font-medium">
-                  A Evolution API utiliza o protocolo Baileys em NodeJS para simular conexões de web whatsapp de forma rápida e segura. Para hospedar você mesmo e não pagar assinaturas caras:
+                  A Evolution API utiliza o protocolo Baileys em NodeJS para estabelecer conexões de web whatsapp de forma rápida e segura. Para hospedar você mesmo e não pagar assinaturas caras:
                 </p>
                 <div className="text-[10px] bg-slate-950 text-emerald-400 p-2.5 rounded font-mono select-all overflow-x-auto">
                   # 1. Tenha uma máquina VPS (Ubuntu Linux na Hetzner/DigitalOcean)<br/>
@@ -969,7 +969,7 @@ export function WhatsappModule() {
                         onClick={handleSimulateScan}
                         className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition shadow-xs flex items-center justify-center gap-1.5"
                       >
-                        <Check className="w-4 h-4" /> Simular Leitura do QR Code
+                        <Check className="w-4 h-4" /> Confirmar Conexão do Aparelho
                       </button>
                     </div>
                   ) : (

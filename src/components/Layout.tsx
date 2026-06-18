@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Users, UserCheck, BookOpen, FileText, CreditCard, 
   LifeBuoy, CheckSquare, LogOut, Menu, X, RefreshCw, Briefcase, 
   DollarSign, MessageSquare, FileSpreadsheet, Award, Video, Sparkles, 
-  UserCircle, Search, HelpCircle, Hammer, Shield, Eye, Bell, Layers
+  UserCircle, Search, HelpCircle, Hammer, Shield, Eye, Bell, Layers, BarChart3, Tag
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { syncNow, useStore } from '../store';
@@ -15,11 +15,10 @@ interface LayoutProps {
   activeTab: any;
   setActiveTab: (tab: any) => void;
   onLogout: () => void;
-  onSwapProfile?: () => void;
   selectedProfile?: string | null;
 }
 
-export function Layout({ children, activeTab, setActiveTab, onLogout, onSwapProfile, selectedProfile }: LayoutProps) {
+export function Layout({ children, activeTab, setActiveTab, onLogout, selectedProfile }: LayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
   
@@ -27,7 +26,7 @@ export function Layout({ children, activeTab, setActiveTab, onLogout, onSwapProf
   const [searchOpen, setSearchOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
-  const { data, isLocalFallbackMode } = useStore();
+  const { data, isLocalFallbackMode, isOnline } = useStore();
   const pessoas = data.pessoas || [];
   const tarefas = data.tarefas_suporte || [];
   const pagamentos = data.pagamentos || [];
@@ -168,8 +167,11 @@ export function Layout({ children, activeTab, setActiveTab, onLogout, onSwapProf
       items: [
         { id: 'dashboard', label: 'Início & Mural', icon: LayoutDashboard },
         { id: 'meu_painel', label: 'Meu Painel', icon: UserCircle },
+        { id: 'meu_perfil', label: 'Meu Perfil', icon: UserCircle },
+        { id: 'relatorio_performance', label: 'Performance', icon: BarChart3 },
         { id: 'prioridades_hoje', label: 'Prioridades de Hoje', icon: CheckSquare },
-        { id: 'busca_global', label: 'Busca Global', icon: Search }
+        { id: 'busca_global', label: 'Busca Global', icon: Search },
+        { id: 'tag_manager', label: 'Gerenciador de Tags', icon: Tag }
       ]
     },
     {
@@ -336,8 +338,15 @@ export function Layout({ children, activeTab, setActiveTab, onLogout, onSwapProf
               </h3>
               
               <div className="space-y-0.5">
-                {group.items.map((item) => {
-                  const Icon = item.icon;
+                {group.items
+                  .filter(item => {
+                    if (item.id === 'relatorio_performance') {
+                      return selectedProfile === 'liana' || selectedProfile === 'ericocavalheiro.psico';
+                    }
+                    return true;
+                  })
+                  .map((item) => {
+                    const Icon = item.icon;
                   // Handle active highlighting
                   const isActive = activeTab === item.id;
                   
@@ -379,15 +388,6 @@ export function Layout({ children, activeTab, setActiveTab, onLogout, onSwapProf
           <RefreshCw className={cn("w-4 h-4 mr-2.5 text-[#D4AF37]", syncing && "animate-spin")} />
           <span>{syncing ? 'Sincronizando...' : 'Sincronizar Firestore'}</span>
         </button>
-        {onSwapProfile && (
-          <button
-            onClick={onSwapProfile}
-            className="w-full flex items-center px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-850 transition"
-          >
-            <UserCircle className="w-4 h-4 mr-2.5" />
-            <span>Mudar Perfil</span>
-          </button>
-        )}
         <button
           onClick={onLogout}
           className="w-full flex items-center px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-850 transition"
@@ -481,10 +481,20 @@ export function Layout({ children, activeTab, setActiveTab, onLogout, onSwapProf
               )}
             </div>
 
-            {isLocalFallbackMode && (
+            {isLocalFallbackMode ? (
               <span className="text-[10px] bg-amber-500/10 border border-amber-500/20 text-amber-600 px-2.5 py-1 rounded-full font-bold flex items-center gap-1 shadow-sm select-none" title="Conexão com Firestore indisponível. O portal está operando em modo offline Sandbox com dados 100% seguros!">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
-                Modo Offline
+                Modo Offline (Sandbox)
+              </span>
+            ) : !isOnline ? (
+              <span className="text-[10px] bg-orange-500/10 border border-orange-500/25 text-orange-600 px-2.5 py-1 rounded-full font-bold flex items-center gap-1 shadow-sm select-none animate-pulse" title="Você está desconectada da internet. O portal continuará funcionando perfeitamente lendo e salvando alterações no cache offline local.">
+                <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
+                Modo Offline (Lendo Cache)
+              </span>
+            ) : (
+              <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 px-2.5 py-1 rounded-full font-bold flex items-center gap-1 shadow-sm select-none" title="Sua conexão está ativa! Toda a base do Firestore está sincronizada de forma transparente em tempo real.">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                Online (Sincronizado)
               </span>
             )}
 

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useStore } from '../../store';
-import { Search, Plus, List, Grid, Edit, User as UserIcon, MessageCircle } from 'lucide-react';
+import { Search, Plus, List, Grid, Edit, User as UserIcon, MessageCircle, FileDown } from 'lucide-react';
 import { cn, normalizeStatusSlug, getStatusLabel } from '../../lib/utils';
 import { exportToCsv } from '../../lib/csv';
 import { PessoaFicha } from './PessoaFicha';
@@ -58,6 +58,14 @@ export function PessoasModule() {
         <div>
           <h1 className="text-2xl font-bold text-[#0A192F]">Base de Pessoas</h1>
           <p className="text-slate-500 text-sm">{filtered.length} registro(s)</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => exportToCsv(`export-pessoas-${new Date().toISOString().split('T')[0]}.csv`, filtered, ['nome', 'email', 'telefone', 'tipoPessoa', 'status', 'temperatura', 'produtoInteresse', 'proximoContato'])}
+            className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-lg flex items-center gap-1.5 transition"
+          >
+            <FileDown className="w-4 h-4 text-[#1D4E89]" /> Exportar CSV
+          </button>
         </div>
       </div>
 
@@ -151,7 +159,7 @@ export function PessoasModule() {
                               }
                               window.open(`https://api.whatsapp.com/send?phone=${cleanPhone}`, '_blank', 'noreferrer,noopener');
                             }}
-                            className="p-1 text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors opacity-0 group-hover/wa:opacity-100 focus:opacity-100"
+                            className="p-2 sm:p-1 text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors opacity-100 sm:opacity-0 sm:group-hover/wa:opacity-100 focus:opacity-100"
                             title="Falar direto no WhatsApp"
                           >
                             <MessageCircle className="w-3.5 h-3.5" />

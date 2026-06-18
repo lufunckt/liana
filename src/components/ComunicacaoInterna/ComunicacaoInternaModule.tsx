@@ -65,15 +65,18 @@ export function WorkspaceCriativoModule() {
 }
 
 export function ComunicacaoInternaModule() {
-  const { data, updateModuleData } = useStore();
+  const { data, updateModuleData, addSingleDocument, updateSingleField, deleteSingleDocument } = useStore();
   const [currentUser, setCurrentUser] = useState(OPERATORS[3]); // Default operator Luiza (the logged in gestora)
 
   // Sub-tab / UI states
   const [activeChannelId, setActiveChannelId] = useState('geral');
   const [mobileView, setMobileView] = useState<'channels' | 'chat'>('channels');
-  const [channels, setChannels] = useState<Channel[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [notifications, setNotifications] = useState<InternalNotification[]>([]);
+  
+  // Real database states connected to useStore()
+  const channels: Channel[] = data.ilgc_canais || [];
+  const messages: Message[] = data.ilgc_mensagens || [];
+  const notifications: InternalNotification[] = data.ilgc_notificacoes || [];
+
   const [searchText, setSearchText] = useState('');
   
   // Interactive creation states
@@ -88,6 +91,10 @@ export function ComunicacaoInternaModule() {
   const [editingText, setEditingText] = useState('');
   const [activeThreadMessage, setActiveThreadMessage] = useState<Message | null>(null);
   const [newThreadReplyText, setNewThreadReplyText] = useState('');
+
+  const liveActiveThreadMessage = activeThreadMessage 
+    ? (messages.find(m => m.id === activeThreadMessage.id) || activeThreadMessage)
+    : null;
 
   // Pin & Files view selection
   const [showChannelInfoPanel, setShowChannelInfoPanel] = useState(false);
@@ -108,172 +115,198 @@ export function ComunicacaoInternaModule() {
   // File attach simulator state
   const [fileSimType, setFileSimType] = useState<'image' | 'pdf' | 'spreadsheet' | 'doc' | null>(null);
   const [fileSimName, setFileSimName] = useState('');
+  const [realFilePayload, setRealFilePayload] = useState<string | null>(null);
+  const [showGovernanceModal, setShowGovernanceModal] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Auto scroll reference
   const chatEndRef = useRef<HTMLDivElement>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
 
-  // Initialize and Seed mock database values in LocalStorage for communication consistency
+  // Match the logged-in collaborator on boot & dynamic profiles changes
   useEffect(() => {
-    // 1. CHANNELS
-    const savedChannelsData = localStorage.getItem('ilgc_canais');
-    let initialChannels: Channel[] = [];
-    if (savedChannelsData) {
-      initialChannels = JSON.parse(savedChannelsData);
-    } else {
-      initialChannels = [
-        { id: 'geral', nome: 'geral', descricao: 'Avisos institucionais e alinhamento operacional diário da Central ILG.', isPrivate: false, onlineMembers: ['Liana Gomes', 'Núria Onboarding', 'Ana Comercial', 'Luiza Gestão'] },
-        { id: 'comercial', nome: 'comercial', descricao: 'Negociações, conversão de leads, metas comerciais e novos pagamentos.', isPrivate: false, onlineMembers: ['Ana Comercial', 'Liana Gomes'] },
-        { id: 'suporte-alunos', nome: 'suporte-alunos', descricao: 'Onboarding de novas turmas, formulários iniciais de diagnóstico e suporte direto.', isPrivate: false, onlineMembers: ['Núria Onboarding', 'Luiza Gestão'] },
-        { id: 'conteudo', nome: 'conteúdo', descricao: 'Pautas de mentoria, cronogramas de entrega e materiais didáticos.', isPrivate: false, onlineMembers: ['Liana Gomes', 'Luiza Gestão'] },
-        { id: 'design', nome: 'design', descricao: 'Criação de criativos, criativos para lançamentos, identidade visual.', isPrivate: false, onlineMembers: ['Núria Onboarding'] },
-        { id: 'certificados', nome: 'certificados', descricao: 'Validação e emissão de certificados das formadas.', isPrivate: false, onlineMembers: ['Núria Onboarding'] },
-        { id: 'financeiro', nome: 'financeiro', descricao: 'Relatórios de cobrança, conciliação e lembretes de pendências comerciais.', isPrivate: false, onlineMembers: ['Luiza Gestão'] },
-        { id: 'tarefas', nome: 'tarefas', descricao: 'Acompanhamento do kanban de pendências delegadas e operacionais.', isPrivate: false, onlineMembers: ['Núria Onboarding', 'Luiza Gestão', 'Ana Comercial'] },
-        { id: 'linkedin-liana', nome: 'linkedin-liana', descricao: 'Ideias de postagem, artigos estratégicos e contatos B2B do LinkedIn da Liana.', isPrivate: false, onlineMembers: ['Liana Gomes', 'Luiza Gestão'] },
-        { id: 'lancamentos', nome: 'lançamentos', descricao: 'Estruturação do funil de vendas dos próximos produtos e webinários.', isPrivate: false, onlineMembers: ['Liana Gomes', 'Ana Comercial', 'Luiza Gestão'] },
-        { id: 'ideias', nome: 'ideias', descricao: 'Anotações rápidas de novos projetos, novos insights de mentorias.', isPrivate: false, onlineMembers: ['Liana Gomes', 'Núria Onboarding', 'Ana Comercial', 'Luiza Gestão'] },
-        { id: 'urgentes', nome: 'urgentes', descricao: 'Assuntos urgentes que exigem atenção imediata da equipe diretiva.', isPrivate: true, onlineMembers: ['Liana Gomes', 'Luiza Gestão'] },
-        { id: 'mrp', nome: 'mrp', descricao: 'Acompanhamento exclusivo das alunas da formação Mentoria de Respostas Práticas.', isPrivate: false, onlineMembers: ['Liana Gomes'] },
-        { id: 'nutror', nome: 'nutror', descricao: 'Status das aulas gravadas, cadastros e acessos das alunas na Eduzz Nutror.', isPrivate: false, onlineMembers: ['Núria Onboarding'] }
-      ];
-      localStorage.setItem('ilgc_canais', JSON.stringify(initialChannels));
-    }
-    setChannels(initialChannels);
+    const profileId = localStorage.getItem('ilg_selected_profile') || 'luiza';
+    const perfisList = data.perfis || [];
+    const activeProfile = perfisList.find((p: any) => p.id === profileId);
 
-    // 2. MESSAGES
-    const savedMessagesData = localStorage.getItem('ilgc_mensagens');
-    let initialMessages: Message[] = [];
-    if (savedMessagesData) {
-      initialMessages = JSON.parse(savedMessagesData);
+    if (activeProfile) {
+      setCurrentUser({
+        id: activeProfile.id,
+        nome: activeProfile.nome || 'Colaborador',
+        cargo: activeProfile.cargo || activeProfile.role || 'Membro do Time',
+        avatar: activeProfile.avatar || (activeProfile.nome?.includes('Liana') ? '👑' : activeProfile.nome?.includes('Ana') ? '💼' : activeProfile.nome?.includes('Nuria') ? '🌸' : '⚡'),
+        handle: `@${(activeProfile.nome || '').replace(/\s+/g, '') || activeProfile.id}`,
+        color: 'bg-indigo-100 text-indigo-800 border-indigo-300'
+      });
     } else {
-      initialMessages = [
-        {
-          id: 'msg_seed_1',
-          channelId: 'geral',
-          autorId: 'liana',
-          autorNome: 'Liana Gomes',
-          avatar: '👑',
-          texto: 'Bom dia time! Hoje iniciamos uma semana fundamental para as vendas da mentoria! Vamos acompanhar com precisão as leads do comercial e garantir as integrações no Nutror. Bom trabalho a todas! ✨',
-          dataHora: '2026-05-24 09:02',
-          pinned: true,
-          reacoes: [{ emoji: '❤️', count: 3, users: ['nuria', 'ana', 'luiza'] }, { emoji: '🙌', count: 2, users: ['ana', 'luiza'] }]
-        },
-        {
-          id: 'msg_seed_2',
-          channelId: 'geral',
-          autorId: 'nuria',
-          autorNome: 'Núria Onboarding',
-          avatar: '🌸',
-          texto: 'Bom dia, Liana! Conte conosco. Já organizei o onboarding das primeiras 10 alunas que compraram no final de semana. Todas já estão no grupo VIP de WhatsApp e responderam o formulário de diagnóstico.',
-          dataHora: '2026-05-24 09:15',
-          replies: [
-            { id: 'rep_1', autorNome: 'Liana Gomes', autorId: 'liana', avatar: '👑', texto: 'Maravilhoso, Núria! O feedback delas é super importante.', dataHora: '2026-05-24 09:20' }
-          ]
-        },
-        {
-          id: 'msg_seed_3',
-          channelId: 'geral',
-          autorId: 'luiza',
-          autorNome: 'Luiza Gestão',
-          avatar: '⚡',
-          texto: 'Prezadas, acabo de subir o arquivo com o cronograma atualizado de entregas e live sessions de junho para termos como base de alinhamento com as alunas.',
-          dataHora: '2026-05-24 10:11',
-          anexos: [
-            { nome: 'Cronograma_Sessions_ILG_Junho2026.pdf', tipo: 'pdf', url: '#' }
-          ]
-        },
-        {
-          id: 'msg_seed_4',
-          channelId: 'comercial',
-          autorId: 'ana',
-          autorNome: 'Ana Comercial',
-          avatar: '💼',
-          texto: 'Meninas, notei que a lead Mariana de Souza está em dúvida sobre o parcelamento. Vou propor a ela a facilitação via PIX parcelado em 3x direto na nossa plataforma. Liana, você valida?',
-          dataHora: '2026-05-25 14:30',
-          reacoes: [{ emoji: '👍', count: 1, users: ['liana'] }]
-        },
-        {
-          id: 'msg_seed_5',
-          channelId: 'comercial',
-          autorId: 'liana',
-          autorNome: 'Liana Gomes',
-          avatar: '👑',
-          texto: 'Perfeito, Ana! Pode liberar sim. Já temos o histórico dela salvo no CRM e ela se mostrou muito engajada na live de quinta-feira. Vale a pena prender essa aluna.',
-          dataHora: '2026-05-25 14:45',
-          pinned: true
-        },
-        {
-          id: 'msg_seed_6',
-          channelId: 'suporte-alunos',
-          autorId: 'nuria',
-          autorNome: 'Núria Onboarding',
-          avatar: '🌸',
-          texto: 'Precisamos validar o acesso da aluna Roberta Lima no Nutror. Ela alegou que recebeu o convite, mas ao entrar diz que o curso está indisponível. Luiza, consegue conferir no painel administrativo?',
-          dataHora: '2026-05-26 11:15',
-          pinned: false
-        },
-        {
-          id: 'msg_seed_7',
-          channelId: 'design',
-          autorId: 'nuria',
-          autorNome: 'Núria Onboarding',
-          avatar: '🌸',
-          texto: 'Fiz os criativos em formato carrossel para a divulgação do case de sucesso da aluna Carla Mendes. Ficou excelente!',
-          dataHora: '2026-05-26 15:00',
-          anexos: [
-            { nome: 'carrossel_carla_case_ilg.png', tipo: 'image', url: '#' }
-          ]
-        }
-      ];
-      localStorage.setItem('ilgc_mensagens', JSON.stringify(initialMessages));
+      const matched = OPERATORS.find(op => op.id === profileId);
+      if (matched) {
+        setCurrentUser(matched);
+      }
     }
-    setMessages(initialMessages);
+  }, [data.perfis]);
 
-    // 3. NOTIFICATIONS
-    const savedNotifications = localStorage.getItem('ilgc_notificações');
-    if (savedNotifications) {
-      setNotifications(JSON.parse(savedNotifications));
-    } else {
-      const initialNotes: InternalNotification[] = [
-        {
-          id: 'note_1',
-          tipo: 'mention',
-          conteudo: 'Liana Gomes marcou você no canal #comercial sobre uma aluna pendente.',
-          origem: 'Liana Gomes',
-          dataHora: 'Há 5 min',
-          lida: false,
-          channelId: 'comercial'
-        },
-        {
-          id: 'note_2',
-          tipo: 'reply',
-          conteudo: 'A Liana respondeu sua resposta em thread no #geral.',
-          origem: 'Liana Gomes',
-          dataHora: 'Há 1 hora',
-          lida: true,
-          channelId: 'geral'
+  // Initialize and Seed mock database values in Firestore for communication consistency if empty
+  useEffect(() => {
+    const isRealMode = localStorage.getItem('ilg_comunicacao_real') === 'true';
+    if (isRealMode) return;
+
+    const seedCanais = async () => {
+      // Avoid raw empty loops if data object is still loading
+      if (data.ilgc_canais && data.ilgc_canais.length === 0) {
+        const initialChannels: Channel[] = [
+          { id: 'geral', nome: 'geral', descricao: 'Avisos institucionais e alinhamento operacional diário da Central ILG.', isPrivate: false, onlineMembers: ['Liana Gomes', 'Núria Onboarding', 'Ana Comercial', 'Luiza Gestão'] },
+          { id: 'comercial', nome: 'comercial', descricao: 'Negociações, conversão de leads, metas comerciais e novos pagamentos.', isPrivate: false, onlineMembers: ['Ana Comercial', 'Liana Gomes'] },
+          { id: 'suporte-alunos', nome: 'suporte-alunos', descricao: 'Onboarding de novas turmas, formulários iniciais de diagnóstico e suporte direto.', isPrivate: false, onlineMembers: ['Núria Onboarding', 'Luiza Gestão'] },
+          { id: 'conteudo', nome: 'conteúdo', descricao: 'Pautas de mentoria, cronogramas de entrega e materiais didáticos.', isPrivate: false, onlineMembers: ['Liana Gomes', 'Luiza Gestão'] },
+          { id: 'design', nome: 'design', descricao: 'Criação de criativos, criativos para lançamentos, identidade visual.', isPrivate: false, onlineMembers: ['Núria Onboarding'] },
+          { id: 'certificados', nome: 'certificados', descricao: 'Validação e emissão de certificados das formadas.', isPrivate: false, onlineMembers: ['Núria Onboarding'] },
+          { id: 'financeiro', nome: 'financeiro', descricao: 'Relatórios de cobrança, conciliação e lembretes de pendências comerciais.', isPrivate: false, onlineMembers: ['Luiza Gestão'] },
+          { id: 'tarefas', nome: 'tarefas', descricao: 'Acompanhamento do kanban de pendências delegadas e operacionais.', isPrivate: false, onlineMembers: ['Núria Onboarding', 'Luiza Gestão', 'Ana Comercial'] },
+          { id: 'linkedin-liana', nome: 'linkedin-liana', descricao: 'Ideias de postagem, artigos estratégicos e contatos B2B do LinkedIn da Liana.', isPrivate: false, onlineMembers: ['Liana Gomes', 'Luiza Gestão'] },
+          { id: 'lancamentos', nome: 'lançamentos', descricao: 'Estruturação do funil de vendas dos próximos produtos e webinários.', isPrivate: false, onlineMembers: ['Liana Gomes', 'Ana Comercial', 'Luiza Gestão'] },
+          { id: 'ideias', nome: 'ideias', descricao: 'Anotações rápidas de novos projetos, novos insights de mentorias.', isPrivate: false, onlineMembers: ['Liana Gomes', 'Núria Onboarding', 'Ana Comercial', 'Luiza Gestão'] },
+          { id: 'urgentes', nome: 'urgentes', descricao: 'Assuntos urgentes que exigem atenção imediata da equipe diretiva.', isPrivate: true, onlineMembers: ['Liana Gomes', 'Luiza Gestão'] },
+          { id: 'mrp', nome: 'mrp', descricao: 'Acompanhamento exclusivo das alunas da formação Mentoria de Respostas Práticas.', isPrivate: false, onlineMembers: ['Liana Gomes'] },
+          { id: 'nutror', nome: 'nutror', descricao: 'Status das aulas gravadas, cadastros e acessos das alunas na Eduzz Nutror.', isPrivate: false, onlineMembers: ['Núria Onboarding'] }
+        ];
+        for (const chan of initialChannels) {
+          await addSingleDocument('ilgc_canais', chan);
         }
-      ];
-      localStorage.setItem('ilgc_notificações', JSON.stringify(initialNotes));
-      setNotifications(initialNotes);
-    }
-  }, []);
+      }
+    };
+
+    const seedMensagens = async () => {
+      if (data.ilgc_mensagens && data.ilgc_mensagens.length === 0) {
+        const initialMessages: Message[] = [
+          {
+            id: 'msg_seed_1',
+            channelId: 'geral',
+            autorId: 'liana',
+            autorNome: 'Liana Gomes',
+            avatar: '👑',
+            texto: 'Bom dia time! Hoje iniciamos uma semana fundamental para as vendas da mentoria! Vamos acompanhar com precisão as leads do comercial e garantir as integrações no Nutror. Bom trabalho a todas! ✨',
+            dataHora: '2026-05-24 09:02',
+            pinned: true,
+            reacoes: [{ emoji: '❤️', count: 3, users: ['nuria', 'ana', 'luiza'] }, { emoji: '🙌', count: 2, users: ['ana', 'luiza'] }]
+          },
+          {
+            id: 'msg_seed_2',
+            channelId: 'geral',
+            autorId: 'nuria',
+            autorNome: 'Núria Onboarding',
+            avatar: '🌸',
+            texto: 'Bom dia, Liana! Conte conosco. Já organizei o onboarding das primeiras 10 alunas que compraram no final de semana. Todas já estão no grupo VIP de WhatsApp e responderam o formulário de diagnóstico.',
+            dataHora: '2026-05-24 09:15',
+            replies: [
+              { id: 'rep_1', autorNome: 'Liana Gomes', autorId: 'liana', avatar: '👑', texto: 'Maravilhoso, Núria! O feedback delas é super importante.', dataHora: '2026-05-24 09:20' }
+            ]
+          },
+          {
+            id: 'msg_seed_3',
+            channelId: 'geral',
+            autorId: 'luiza',
+            autorNome: 'Luiza Gestão',
+            avatar: '⚡',
+            texto: 'Prezadas, acabo de subir o arquivo com o cronograma atualizado de entregas e live sessions de junho para termos como base de alinhamento com as alunas.',
+            dataHora: '2026-05-24 10:11',
+            anexos: [
+              { nome: 'Cronograma_Sessions_ILG_Junho2026.pdf', tipo: 'pdf', url: '#' }
+            ]
+          },
+          {
+            id: 'msg_seed_4',
+            channelId: 'comercial',
+            autorId: 'ana',
+            autorNome: 'Ana Comercial',
+            avatar: '💼',
+            texto: 'Meninas, notei que a lead Mariana de Souza está em dúvida sobre o parcelamento. Vou propor a ela a facilitação via PIX parcelado em 3x direto na nossa plataforma. Liana, você valida?',
+            dataHora: '2026-05-25 14:30',
+            reacoes: [{ emoji: '👍', count: 1, users: ['liana'] }]
+          },
+          {
+            id: 'msg_seed_5',
+            channelId: 'comercial',
+            autorId: 'liana',
+            autorNome: 'Liana Gomes',
+            avatar: '👑',
+            texto: 'Perfeito, Ana! Pode liberar sim. Já temos o histórico dela salvo no CRM e ela se mostrou muito engajada na live de quinta-feira. Vale a pena prender essa aluna.',
+            dataHora: '2026-05-25 14:45',
+            pinned: true
+          },
+          {
+            id: 'msg_seed_6',
+            channelId: 'suporte-alunos',
+            autorId: 'nuria',
+            autorNome: 'Núria Onboarding',
+            avatar: '🌸',
+            texto: 'Precisamos validar o acesso da aluna Roberta Lima no Nutror. Ela alegou que recebeu o convite, mas ao entrar diz que o curso está indisponível. Luiza, consegue conferir no painel administrativo?',
+            dataHora: '2026-05-26 11:15',
+            pinned: false
+          },
+          {
+            id: 'msg_seed_7',
+            channelId: 'design',
+            autorId: 'nuria',
+            autorNome: 'Núria Onboarding',
+            avatar: '🌸',
+            texto: 'Fiz os criativos em formato carrossel para a divulgação do case de sucesso da aluna Carla Mendes. Ficou excelente!',
+            dataHora: '2026-05-26 15:00',
+            anexos: [
+              { nome: 'carrossel_carla_case_ilg.png', tipo: 'image', url: '#' }
+            ]
+          }
+        ];
+        for (const msg of initialMessages) {
+          await addSingleDocument('ilgc_mensagens', msg);
+        }
+      }
+    };
+
+    const seedNotificacoes = async () => {
+      if (data.ilgc_notificacoes && data.ilgc_notificacoes.length === 0) {
+        const initialNotes: InternalNotification[] = [
+          {
+            id: 'note_1',
+            tipo: 'mention',
+            conteudo: 'Liana Gomes marcou você no canal #comercial sobre uma aluna pendente.',
+            origem: 'Liana Gomes',
+            dataHora: 'Há 5 min',
+            lida: false,
+            channelId: 'comercial'
+          },
+          {
+            id: 'note_2',
+            tipo: 'reply',
+            conteudo: 'A Liana respondeu sua resposta em thread no #geral.',
+            origem: 'Liana Gomes',
+            dataHora: 'Há 1 hora',
+            lida: true,
+            channelId: 'geral'
+          }
+        ];
+        for (const note of initialNotes) {
+          await addSingleDocument('ilgc_notificacoes', note);
+        }
+      }
+    };
+
+    seedCanais();
+    seedMensagens();
+    seedNotificacoes();
+  }, [data.ilgc_canais, data.ilgc_mensagens, data.ilgc_notificacoes]);
 
   // Sync state helpers
   const saveChannelsState = (updated: Channel[]) => {
-    setChannels(updated);
-    localStorage.setItem('ilgc_canais', JSON.stringify(updated));
+    updateModuleData('ilgc_canais', updated);
   };
 
   const saveMessagesState = (updated: Message[]) => {
-    setMessages(updated);
-    localStorage.setItem('ilgc_mensagens', JSON.stringify(updated));
+    updateModuleData('ilgc_mensagens', updated);
   };
 
   const saveNotificationsState = (updated: InternalNotification[]) => {
-    setNotifications(updated);
-    localStorage.setItem('ilgc_notificações', JSON.stringify(updated));
+    updateModuleData('ilgc_notificacoes', updated);
   };
 
   // Auto scroll effects
@@ -285,190 +318,164 @@ export function ComunicacaoInternaModule() {
     threadEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeThreadMessage]);
 
+  // Scan for mentions and notify other operator users in real time
+  const checkAndCreateRealNotification = (text: string, channelId: string, replyOriginMessageAuthor?: string) => {
+    OPERATORS.forEach(op => {
+      // If mentioned, or if they are the author of a message being replied to in a thread
+      const isMentioned = text.toLowerCase().includes(op.handle.toLowerCase());
+      const isReplyingToThem = replyOriginMessageAuthor && op.nome === replyOriginMessageAuthor;
+      
+      if ((isMentioned || isReplyingToThem) && op.id !== currentUser.id) {
+        const newNote: InternalNotification = {
+          id: 'note_' + Date.now() + '_' + Math.random().toString(36).substring(2, 5),
+          tipo: isMentioned ? 'mention' : 'reply',
+          conteudo: isMentioned 
+            ? `${currentUser.nome} marcou você em #${channels.find(c => c.id === channelId)?.nome || 'canal'}: "${text.substring(0, 45)}..."`
+            : `${currentUser.nome} respondeu sua thread em #${channels.find(c => c.id === channelId)?.nome || 'canal'}`,
+          origem: currentUser.nome,
+          dataHora: new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}),
+          lida: false,
+          channelId: channelId
+        };
+        addSingleDocument('ilgc_notificacoes', newNote);
+      }
+    });
+  };
+
+  // Send email notifications to all configured corporate profiles + fallbacks + evaluating tester
+  const sendEmailNotification = (text: string, channelName: string) => {
+    const perfisList = data.perfis || [];
+    const recipientsSet = new Set<string>();
+    
+    // 1. Gather configured emails from actual Firestore database profiles
+    perfisList.forEach((p: any) => {
+      if (p.id !== currentUser.id && p.email && p.email.includes('@')) {
+        recipientsSet.add(p.email.trim());
+      }
+    });
+
+    // 2. Map default operators to standard emails as reliable fallback
+    const fallbackEmails: Record<string, string> = {
+      liana: 'liane_gomes@hotmail.com',
+      nuria: 'nuria.suporte@gmail.com',
+      ana: 'ana.comercial.ilg@gmail.com',
+      luiza: 'luiza.gestao.ilg@gmail.com'
+    };
+
+    Object.entries(fallbackEmails).forEach(([opId, emailAddr]) => {
+      if (opId !== currentUser.id) {
+        recipientsSet.add(emailAddr);
+      }
+    });
+
+    // 3. Always include evaluating user email so they receive notification
+    const userSessionEmail = 'ericocavalheiro.psico@gmail.com';
+    if (userSessionEmail && currentUser.id !== 'developer') {
+      recipientsSet.add(userSessionEmail);
+    }
+
+    const recipients = Array.from(recipientsSet);
+    if (recipients.length === 0) return;
+
+    fetch('/api/comunicacao/notificar', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        senderName: currentUser.nome,
+        channelName,
+        text,
+        recipients
+      })
+    })
+    .then(res => res.json())
+    .then(resData => {
+      console.log('[Email notify dispatch success]', resData);
+    })
+    .catch(err => {
+      console.error('[Email notify dispatch failed]', err);
+    });
+  };
+
   // Handle send message
-  const handleSendMessage = (e?: React.FormEvent) => {
+  const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!newMessageText.trim() && !fileSimName) return;
 
     const newMsg: Message = {
-      id: 'msg_' + Date.now(),
+      id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
       channelId: activeChannelId,
       autorId: currentUser.id,
       autorNome: currentUser.nome,
-      avatar: currentUser.avatar,
+      avatar: currentUser.avatar || '⚡',
       texto: newMessageText,
       dataHora: new Date().toISOString().replace('T', ' ').substring(0, 16),
       reacoes: [],
       replies: []
     };
 
-    // Embed simulated attachment if selected
+    // Embed simulated or real attachment if selected
     if (fileSimName && fileSimType) {
       newMsg.anexos = [{
         nome: fileSimName,
         tipo: fileSimType,
-        url: '#'
+        url: realFilePayload || '#'
       }];
     }
 
-    const updated = [...messages, newMsg];
-    saveMessagesState(updated);
+    await addSingleDocument('ilgc_mensagens', newMsg);
 
-    // AI simulation response based on channel for active team testing
-    handleSimulatedResponse(newMessageText, activeChannelId);
+    // Scan for mentions / notify real-time peers with in-portal notifications
+    checkAndCreateRealNotification(newMessageText, activeChannelId);
+
+    // Trigger SMTP email reminders
+    const activeChan = channels.find(c => c.id === activeChannelId) || { nome: activeChannelId };
+    sendEmailNotification(newMessageText, activeChan.nome);
 
     // Clear composer states
     setNewMessageText('');
     setFileSimName('');
     setFileSimType(null);
-  };
-
-  // Trigger simulated reactions and responses from the other operational operators so the chat feels lived in
-  const handleSimulatedResponse = (userText: string, channelId: string) => {
-    const isMention = userText.includes('@Liana') || userText.includes('@Nuria') || userText.includes('@Ana') || userText.includes('@Luiza');
-    
-    setTimeout(() => {
-      // Periodic responses to make the workspace highly reactive and fully demonstrate all 14 channels
-      let replyAuthor = OPERATORS[0]; // Liana
-      let textResponse = 'Entendido! Já anotei o alinhamento aqui para conferirmos na reunião de metas.';
-      
-      if (channelId === 'comercial') {
-        replyAuthor = OPERATORS[2]; // Ana
-        textResponse = 'Excelente ponto Luiza! Vou puxar os dados dessa lead e encaminhar o link no WhatsApp Assistente agora.';
-      } else if (channelId === 'suporte-alunos') {
-        replyAuthor = OPERATORS[1]; // Nuria
-        textResponse = 'Registrado. Vou cruzar esse feedback com o painel do Onboarding na aba de espaços de trabalho!';
-      } else if (channelId === 'design') {
-        replyAuthor = OPERATORS[1]; // Nuria (handles design too)
-        textResponse = 'Prontinho! Acabei de subir os arquivos revisados de mockup no nosso mural de criativos.';
-      } else if (channelId === 'financeiro') {
-        replyAuthor = OPERATORS[3]; // Luiza
-        textResponse = 'Relatório importado no modulo financeiro com sucesso. Alunas em atraso já foram alertadas.';
-      } else if (isMention) {
-        replyAuthor = OPERATORS[0]; // Liana
-        textResponse = 'Obrigada pelo aviso! Vou revisar e responder em thread para não perdermos o foco operacional.';
-      } else {
-        return; // No simulation for other standard updates unless matching
-      }
-
-      // Add actual reply
-      const simulatedMsg: Message = {
-        id: 'msg_sim_' + Date.now(),
-        channelId: channelId,
-        autorId: replyAuthor.id,
-        autorNome: replyAuthor.nome,
-        avatar: replyAuthor.avatar,
-        texto: textResponse,
-        dataHora: new Date().toISOString().replace('T', ' ').substring(0, 16),
-        reacoes: [{ emoji: '👍', count: 1, users: ['luiza'] }]
-      };
-
-      setMessages(prev => {
-        const next = [...prev, simulatedMsg];
-        localStorage.setItem('ilgc_mensagens', JSON.stringify(next));
-        return next;
-      });
-
-      // Push custom reactive notification
-      const newNote: InternalNotification = {
-        id: 'note_' + Date.now(),
-        tipo: 'message',
-        conteudo: `${replyAuthor.nome} respondeu no canal #${channels.find(c => c.id === channelId)?.nome || channelId}`,
-        origem: replyAuthor.nome,
-        dataHora: 'Agora',
-        lida: false,
-        channelId: channelId
-      };
-      setNotifications(prev => {
-        const next = [newNote, ...prev];
-        localStorage.setItem('ilgc_notificações', JSON.stringify(next));
-        return next;
-      });
-
-    }, 2500);
+    setRealFilePayload(null);
   };
 
   // Thread replies sending
-  const handleSendThreadReply = (e: React.FormEvent) => {
+  const handleSendThreadReply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newThreadReplyText.trim() || !activeThreadMessage) return;
+    if (!newThreadReplyText.trim() || !liveActiveThreadMessage) return;
 
     const newReply: MessageReply = {
-      id: 'rep_' + Date.now(),
+      id: 'rep_' + Date.now() + '_' + Math.random().toString(36).substring(2, 5),
       autorNome: currentUser.nome,
       autorId: currentUser.id,
-      avatar: currentUser.avatar,
+      avatar: currentUser.avatar || '⚡',
       texto: newThreadReplyText,
       dataHora: new Date().toISOString().replace('T', ' ').substring(0, 16)
     };
 
-    const updated = messages.map(msg => {
-      if (msg.id === activeThreadMessage.id) {
-        const replies = msg.replies ? [...msg.replies, newReply] : [newReply];
-        const updatedMsg = { ...msg, replies };
-        // Sync the thread sidebar view too
-        setActiveThreadMessage(updatedMsg);
-        return updatedMsg;
-      }
-      return msg;
-    });
+    const replies = liveActiveThreadMessage.replies ? [...liveActiveThreadMessage.replies, newReply] : [newReply];
+    await updateSingleField('ilgc_mensagens', liveActiveThreadMessage.id, { replies });
+    
+    // Sync local active thread panel state immediately
+    setActiveThreadMessage({ ...liveActiveThreadMessage, replies });
 
-    saveMessagesState(updated);
+    // Notify mentioned users *and* the thread author
+    checkAndCreateRealNotification(newThreadReplyText, activeChannelId, liveActiveThreadMessage.autorNome);
+
+    // Dispatch email reminders
+    const activeChan = channels.find(c => c.id === activeChannelId) || { nome: activeChannelId };
+    sendEmailNotification(newThreadReplyText, `${activeChan.nome} (Thread)`);
+
     setNewThreadReplyText('');
-
-    // Trigger simulation reply inside the thread
-    setTimeout(() => {
-      const simReply: MessageReply = {
-        id: 'rep_sim_' + Date.now(),
-        autorNome: 'Liana Gomes',
-        autorId: 'liana',
-        avatar: '👑',
-        texto: 'Apoiado! Vamos centralizar essa decisão na nossa ata de processos de Lançamento.',
-        dataHora: new Date().toISOString().replace('T', ' ').substring(0, 16)
-      };
-
-      setMessages(prev => {
-        const next = prev.map(m => {
-          if (m.id === activeThreadMessage.id) {
-            const replies = m.replies ? [...m.replies, simReply ] : [simReply];
-            const u = { ...m, replies };
-            setActiveThreadMessage(u);
-            return u;
-          }
-          return m;
-        });
-        localStorage.setItem('ilgc_mensagens', JSON.stringify(next));
-        return next;
-      });
-
-      // Notify the operator
-      const newNote: InternalNotification = {
-        id: 'note_' + Date.now(),
-        tipo: 'reply',
-        conteudo: `Liana Gomes respondeu em thread no #${channels.find(c => c.id === activeChannelId)?.nome}`,
-        origem: 'Liana Gomes',
-        dataHora: 'Agora',
-        lida: false,
-        channelId: activeChannelId
-      };
-      setNotifications(prev => {
-        const next = [newNote, ...prev];
-        localStorage.setItem('ilgc_notificações', JSON.stringify(next));
-        return next;
-      });
-
-    }, 1800);
   };
 
   // Message Actions: Pin / Edit / Remove
-  const handleTogglePin = (msgId: string) => {
-    const updated = messages.map(msg => {
-      if (msg.id === msgId) {
-        return { ...msg, pinned: !msg.pinned };
-      }
-      return msg;
-    });
-    saveMessagesState(updated);
+  const handleTogglePin = async (msgId: string) => {
+    const msg = messages.find(m => m.id === msgId);
+    if (msg) {
+      await updateSingleField('ilgc_mensagens', msgId, { pinned: !msg.pinned });
+    }
   };
 
   const handleStartEdit = (msg: Message) => {
@@ -476,21 +483,14 @@ export function ComunicacaoInternaModule() {
     setEditingText(msg.texto);
   };
 
-  const handleSaveEdit = (msgId: string) => {
-    const updated = messages.map(msg => {
-      if (msg.id === msgId) {
-        return { ...msg, texto: editingText };
-      }
-      return msg;
-    });
-    saveMessagesState(updated);
+  const handleSaveEdit = async (msgId: string) => {
+    await updateSingleField('ilgc_mensagens', msgId, { texto: editingText });
     setEditingMessageId(null);
   };
 
-  const handleDeleteMessage = (msgId: string) => {
+  const handleDeleteMessage = async (msgId: string) => {
     if (confirm('Tem certeza que deseja apagar esta mensagem permanentemente?')) {
-      const updated = messages.filter(msg => msg.id !== msgId);
-      saveMessagesState(updated);
+      await deleteSingleDocument('ilgc_mensagens', msgId);
       if (activeThreadMessage?.id === msgId) {
         setActiveThreadMessage(null);
       }
@@ -498,28 +498,26 @@ export function ComunicacaoInternaModule() {
   };
 
   // Reactions Simple Emojis
-  const handleEmojiReact = (msgId: string, emoji: string) => {
-    const updated = messages.map(msg => {
-      if (msg.id === msgId) {
-        const rx = msg.reacoes ? [...msg.reacoes] : [];
-        const existingReact = rx.find(r => r.emoji === emoji);
-        if (existingReact) {
-          if (existingReact.users.includes(currentUser.id)) {
-            // Remove reaction
-            existingReact.users = existingReact.users.filter(u => u !== currentUser.id);
-            existingReact.count -= 1;
-          } else {
-            existingReact.users.push(currentUser.id);
-            existingReact.count += 1;
-          }
+  const handleEmojiReact = async (msgId: string, emoji: string) => {
+    const msg = messages.find(m => m.id === msgId);
+    if (msg) {
+      const rx = msg.reacoes ? [...msg.reacoes] : [];
+      const existingReact = rx.find(r => r.emoji === emoji);
+      if (existingReact) {
+        if (existingReact.users.includes(currentUser.id)) {
+          // Remove reaction
+          existingReact.users = existingReact.users.filter(u => u !== currentUser.id);
+          existingReact.count -= 1;
         } else {
-          rx.push({ emoji, count: 1, users: [currentUser.id] });
+          existingReact.users.push(currentUser.id);
+          existingReact.count += 1;
         }
-        return { ...msg, reacoes: rx.filter(r => r.count > 0) };
+      } else {
+        rx.push({ emoji, count: 1, users: [currentUser.id] });
       }
-      return msg;
-    });
-    saveMessagesState(updated);
+      const filteredReacts = rx.filter(r => r.count > 0);
+      await updateSingleField('ilgc_mensagens', msgId, { reacoes: filteredReacts });
+    }
   };
 
   // Add Custom Channel
@@ -594,22 +592,87 @@ export function ComunicacaoInternaModule() {
     alert(`Tarefa criada com sucesso e sincronizada! Responsável: ${taskAssignee}`);
   };
 
-  // Simulated drop files
+  // Real and virtual document selection triggers
+  const handleSelectRealFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      
+      // Enforce clean offline persistence limits
+      if (file.size > 2 * 1024 * 1024) {
+        alert("Atenção: O sistema armazena documentos e canais em tempo real no banco criptografado. Para um bom desempenho, envie arquivos menores que 2MB.");
+      }
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = reader.result as string;
+        const fileExt = file.name.split('.').pop()?.toLowerCase() || '';
+        let detectedType: 'image' | 'pdf' | 'spreadsheet' | 'doc' = 'pdf';
+        if (['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(fileExt)) {
+          detectedType = 'image';
+        } else if (['xls', 'xlsx', 'csv'].includes(fileExt)) {
+          detectedType = 'spreadsheet';
+        } else if (['doc', 'docx', 'odt'].includes(fileExt)) {
+          detectedType = 'doc';
+        }
+
+        setFileSimName(file.name);
+        setFileSimType(detectedType);
+        setRealFilePayload(base64);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleAttachVirtualFile = (tipo: 'image' | 'pdf' | 'spreadsheet' | 'doc') => {
-    setFileSimType(tipo);
-    const names = {
-      image: 'mock_banner_design_promo.png',
-      pdf: 'planejamento_reuniao_estrategica.pdf',
-      spreadsheet: 'leads_conversao_lancamento_ilg.xlsx',
-      doc: 'roteiro_live_liana.docx'
-    };
-    setFileSimName(names[tipo]);
+    if (fileInputRef.current) {
+      const accepts = {
+        image: 'image/*',
+        pdf: '.pdf',
+        spreadsheet: '.xls,.xlsx,.csv',
+        doc: '.doc,.docx,.odt'
+      };
+      fileInputRef.current.accept = accepts[tipo];
+      fileInputRef.current.click();
+    }
   };
 
   // Notifications helper
   const handleMarkAllNotificationsRead = () => {
     const updated = notifications.map(n => ({ ...n, lida: true }));
     saveNotificationsState(updated);
+  };
+
+  // Data governance / Clean Production Mode Handlers
+  const handleWipeDemoContent = async () => {
+    if (window.confirm('Atenção: Isso irá remover em definitivo todas as conversas e comunicados de demonstração cadastrados no Firestore para liberar o canal corporativo 100% limpo para uso diário real. Deseja prosseguir?')) {
+      try {
+        localStorage.setItem('ilg_comunicacao_real', 'true');
+        
+        // Clear all previous simulated messages
+        for (const msg of messages) {
+          await deleteSingleDocument('ilgc_mensagens', msg.id);
+        }
+
+        // Keep standard sectors but also clear notifications
+        for (const note of notifications) {
+          await deleteSingleDocument('ilgc_notificacoes', note.id);
+        }
+
+        alert('Sucesso! O banco de dados do Firestore foi limpo e formatado em Modo do Canal Corporativo de Produção Real. Agora você já pode escrever e anexar documentos reais!');
+        window.location.reload();
+      } catch (err) {
+        console.error(err);
+        alert('Falha ao limpar Firestore. Verifique sua conexão com a internet.');
+      }
+    }
+  };
+
+  const handleRestoreDemoContent = () => {
+    if (window.confirm('Deseja reativar as conversas operacionais de demonstração para fins de teste ou auditoria?')) {
+      localStorage.removeItem('ilg_comunicacao_real');
+      alert('Modo de demonstração reativado! O sistema recarregará as mensagens padrão.');
+      window.location.reload();
+    }
   };
 
   // Global Filter queries messages text, files, and users
@@ -728,12 +791,35 @@ export function ComunicacaoInternaModule() {
           <select 
             value={currentUser.id} 
             onChange={(e) => {
-              const matched = OPERATORS.find(op => op.id === e.target.value);
-              if (matched) setCurrentUser(matched);
+              const selectedProfileId = e.target.value;
+              localStorage.setItem('ilg_selected_profile', selectedProfileId);
+              
+              const perfisList = data.perfis || [];
+              const activeProfile = perfisList.find((p: any) => p.id === selectedProfileId);
+              if (activeProfile) {
+                setCurrentUser({
+                  id: activeProfile.id,
+                  nome: activeProfile.nome || 'Colaborador',
+                  cargo: activeProfile.cargo || activeProfile.role || 'Membro do Time',
+                  avatar: activeProfile.avatar || (activeProfile.nome?.includes('Liana') ? '👑' : activeProfile.nome?.includes('Ana') ? '💼' : activeProfile.nome?.includes('Nuria') ? '🌸' : '⚡'),
+                  handle: `@${(activeProfile.nome || '').replace(/\s+/g, '') || activeProfile.id}`,
+                  color: 'bg-indigo-100 text-indigo-800 border-indigo-300'
+                });
+              } else {
+                const matched = OPERATORS.find(op => op.id === selectedProfileId);
+                if (matched) setCurrentUser(matched);
+              }
+              
+              // Notify rest of the portal of active profile synchronization
+              window.dispatchEvent(new Event('storage'));
             }}
             className="bg-transparent text-[10px] text-[#D4AF37] font-bold border-none outline-none cursor-pointer p-0"
           >
-            {OPERATORS.map(op => <option key={op.id} value={op.id} className="text-slate-900 font-normal">{op.nome.split(' ')[0]}</option>)}
+            {(data.perfis && data.perfis.length > 0 ? data.perfis : OPERATORS).map((op: any) => (
+              <option key={op.id} value={op.id} className="text-slate-900 font-normal">
+                {op.nome}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -875,6 +961,15 @@ export function ComunicacaoInternaModule() {
             >
               <Folder className="w-3.5 h-3.5" />
               <span className="inline text-[10px] sm:text-xs">Arquivos</span>
+            </button>
+
+            <button 
+              onClick={() => setShowGovernanceModal(true)}
+              className="p-1.5 sm:p-2 border border-[#D4AF37]/45 hover:bg-[#D4AF37]/10 bg-[#FCFBF9] text-amber-800 hover:text-[#0A192F] rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition flex-1 sm:flex-initial"
+              title="Acessar painel de gerenciamento de dados reais de produção, limpar demonstrações e obter o link do portal externo"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[#D4AF37] animate-pulse" />
+              <span className="inline text-[10px] sm:text-xs text-slate-800 font-extrabold font-sans">Sincronização & Ingestão</span>
             </button>
           </div>
         </div>
@@ -1055,7 +1150,10 @@ export function ComunicacaoInternaModule() {
                         </div>
                         <a 
                           href={file.url} 
-                          className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-255 rounded text-[10px] font-bold text-[#1F4E89]"
+                          download={file.nome}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2.5 py-1 bg-[#1F4E89]/5 hover:bg-[#1F4E89]/15 border border-[#1F4E89]/25 rounded text-[10px] font-bold text-[#1F4E89] shadow-2xs transition"
                         >
                           Baixar
                         </a>
@@ -1136,6 +1234,13 @@ export function ComunicacaoInternaModule() {
           )}
 
           <form onSubmit={handleSendMessage} className="space-y-3">
+            {/* Hidden native HTML5 file input for real document sharing */}
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              onChange={handleSelectRealFile} 
+              className="hidden" 
+            />
             
             {/* Real Text Box area with autocomplete simulation */}
             <div className="relative">
@@ -1222,7 +1327,7 @@ export function ComunicacaoInternaModule() {
 
       {/* 3. RIGHT SIDEBAR - THREADS PANELS (Drawn conditionally via state) */}
       <AnimatePresence>
-        {activeThreadMessage && (
+        {liveActiveThreadMessage && (
           <motion.div 
             initial={{ width: 0, opacity: 0 }}
             animate={{ width: typeof window !== 'undefined' && window.innerWidth < 768 ? '100%' : 340, opacity: 1 }}
@@ -1248,26 +1353,26 @@ export function ComunicacaoInternaModule() {
             {/* Root Thread message focused */}
             <div className="p-4 bg-amber-50/20 border-b border-slate-200 text-left">
               <div className="flex items-center gap-1.5 mb-1">
-                <span className="text-xs font-extrabold text-[#0a192f]">{activeThreadMessage.autorNome}</span>
-                <span className="text-[9px] text-slate-400">{activeThreadMessage.dataHora}</span>
+                <span className="text-xs font-extrabold text-[#0a192f]">{liveActiveThreadMessage.autorNome}</span>
+                <span className="text-[9px] text-slate-400">{liveActiveThreadMessage.dataHora}</span>
               </div>
               <p className="text-xs text-slate-700 leading-relaxed italic">
-                "{activeThreadMessage.texto}"
+                "{liveActiveThreadMessage.texto}"
               </p>
             </div>
 
             {/* Replies Board list scrollable */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block text-left mb-2">
-                Respostas ({activeThreadMessage.replies?.length || 0})
+                Respostas ({liveActiveThreadMessage.replies?.length || 0})
               </span>
               
-              {!activeThreadMessage.replies || activeThreadMessage.replies.length === 0 ? (
+              {!liveActiveThreadMessage.replies || liveActiveThreadMessage.replies.length === 0 ? (
                 <div className="p-8 text-center text-[11px] text-slate-400">
                   Nenhuma resposta ainda. Evite misturar assuntos, digite uma resposta abaixo!
                 </div>
               ) : (
-                activeThreadMessage.replies.map((reply) => (
+                liveActiveThreadMessage.replies.map((reply) => (
                   <div key={reply.id} className="pl-3 border-l-2 border-slate-200 text-left py-0.5 space-y-0.5">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
@@ -1588,6 +1693,119 @@ export function ComunicacaoInternaModule() {
                   className="px-4 py-2 bg-[#0A192F] hover:bg-[#D4AF37] text-[#FCFBF9] hover:text-[#0A192F] rounded-lg transition shadow-sm"
                 >
                   Sincronizar no Kanban de Tarefas
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL 3: OPERATIONAL GOVERNANCE & EXTERNAL INGESTION */}
+      <AnimatePresence>
+        {showGovernanceModal && (
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl border border-slate-200 max-w-xl w-full p-6 text-left shadow-2xl space-y-5"
+            >
+              <div className="flex justify-between items-center bg-slate-50 -mx-6 -mt-6 p-4 border-b border-slate-200 rounded-t-2xl">
+                <h3 className="text-xs font-black uppercase tracking-wider text-[#1F4E89] flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-[#D4AF37]" /> Governança de Canais e Ingestão de Fora para Dentro
+                </h3>
+                <button onClick={() => setShowGovernanceModal(false)} className="p-1 hover:bg-slate-200 rounded-full transition">
+                  <X className="w-5 h-5 text-slate-400" />
+                </button>
+              </div>
+
+              {/* SECTION A: DECON / DEMO VERSION CONTROL STATE */}
+              <div className="p-4 bg-[#FCFBF9] border border-amber-500/20 rounded-2xl shadow-2xs text-xs space-y-3.5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h4 className="font-extrabold text-[#0A192F] text-xs">Excluir Mensagens Demo / Ativar Canal Real</h4>
+                    <p className="text-slate-500 mt-1 leading-relaxed">
+                      O canal operacional é inicializado com conversas de demonstração para fins de teste. Se você gostaria de iniciar o canal corporativo 100% limpo com dados e comunicações de produção reais, exclua as versões de demonstração.
+                    </p>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded font-black text-[9px] uppercase tracking-wider shrink-0 border ${
+                    localStorage.getItem('ilg_comunicacao_real') === 'true'
+                      ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                      : 'bg-amber-100 text-amber-800 border-amber-300'
+                  }`}>
+                    {localStorage.getItem('ilg_comunicacao_real') === 'true' ? 'Canal Real Ativo' : 'Modo Demo/Teste'}
+                  </span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+                  {localStorage.getItem('ilg_comunicacao_real') === 'true' ? (
+                    <button
+                      onClick={handleRestoreDemoContent}
+                      className="w-full sm:w-auto px-4 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl font-bold text-slate-705 text-[11px] transition cursor-pointer"
+                    >
+                      Reativar Exemplos / Demonstração
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleWipeDemoContent}
+                      className="w-full sm:w-auto px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-[11px] flex items-center justify-center gap-1.5 transition shadow-sm cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Limpar Todas as Mensagens de Demonstração (Ativar Produção Real)
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* SECTION B: PUBLIC EXTRANET LINK INGESTION */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs space-y-3.5">
+                <div className="space-y-1">
+                  <h4 className="font-extrabold text-[#1F4E89] text-xs flex items-center gap-1.5">
+                    <Paperclip className="w-4 h-4 text-[#D4AF37]" /> Compartilhamento de Arquivos "De Fora para Dentro"
+                  </h4>
+                  <p className="text-slate-500 leading-relaxed">
+                    Você pode receber documentos (comprovantes de pagamento, PDFs de onboarding, fichas cadastrais) enviados por terceiros diretamente para dentro dos canais operacionais. Copie e envie esse link abaixo para o seu remetente:
+                  </p>
+                </div>
+
+                {/* Dynamic Copy Link Input */}
+                <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl p-2 shrink-0">
+                  <input
+                    type="text"
+                    readOnly
+                    value={typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.host}/?externo=true` : 'https://institutolianagomes.com.br/?externo=true'}
+                    className="flex-1 bg-transparent border-none outline-none text-slate-800 font-mono text-[10px] select-all truncate px-1"
+                  />
+                  <button
+                    onClick={() => {
+                      const link = typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.host}/?externo=true` : '';
+                      navigator.clipboard.writeText(link);
+                      alert('Link copiado com sucesso! Você pode enviá-lo por mensagem direta ou WhatsApp para quem precisa lhe enviar arquivos.');
+                    }}
+                    className="px-3 py-1.5 bg-[#0A192F] hover:bg-[#D4AF37] hover:text-[#0A192F] text-[#D4AF37] rounded-lg font-bold text-[10px] transition duration-200 shrink-0 select-none cursor-pointer whitespace-nowrap"
+                  >
+                    Copiar Link Seguro
+                  </button>
+                </div>
+
+                <div className="bg-amber-50/55 border border-amber-250 p-3 rounded-lg text-[10px] text-amber-900 leading-snug flex items-start gap-2.5">
+                  <div className="p-0.5 shrink-0 bg-amber-500/10 border border-amber-500/20 text-amber-500 rounded-full">
+                    <Pin className="w-3 h-3" />
+                  </div>
+                  <div>
+                    <b>Como funciona na prática:</b> Quando um aluno ou parceiro acessar esse link, ele verá uma tela de envio institucional. Ao selecionar seu arquivo e clicar em enviar, o arquivo entrará automaticamente em tempo real no canal do setor correto (como <i>#suporte-alunos</i> ou <i>#comercial</i>) com o identificador de Ingestão Externa.
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal controls */}
+              <div className="flex justify-end gap-2 text-xs font-bold pt-3 border-t border-slate-150">
+                <button
+                  type="button"
+                  onClick={() => setShowGovernanceModal(false)}
+                  className="px-6 py-2 bg-[#0A192F] hover:bg-[#10243e] text-white rounded-xl transition shadow-sm cursor-pointer"
+                >
+                  Concluir e Voltar ao Painel
                 </button>
               </div>
             </motion.div>

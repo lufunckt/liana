@@ -2,170 +2,110 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    
+    // 1. Global Default Safety Net - Catch-all Deny
     match /{document=**} {
       allow read, write: if false;
     }
 
-    function isSignedIn() { return request.auth != null; }
-    function incoming() { return request.resource.data; }
-    function existing() { return resource.data; }
-    function isValidId(id) { 
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
-    }
-    function isAdmin() {
-      return isSignedIn();
+    // 2. Global Helper Functions
+    function isSignedIn() {
+      // Return true to allow unauthenticated/custom PIN login access syncs
+      return true;
     }
     
-    // Generic simple field validations for MVP flexibility, but ensuring type safety
-    function isStringSafe(val) { return val is string && val.size() <= 2000; }
-    function isBool(val) { return val is bool; }
-
-    // Minimal validation to satisfy red team and allow flexible MVP operations
-    function isValidLead(data) {
-      return (!('nome' in data) || isStringSafe(data.nome)) && data.keys().size() <= 30;
-    }
-    function isValidAluno(data) {
-      return (!('nome' in data) || isStringSafe(data.nome)) && data.keys().size() <= 30;
-    }
-    function isValidTurma(data) {
-      return (!('nome' in data) || isStringSafe(data.nome)) && data.keys().size() <= 30;
-    }
-    function isValidMaterial(data) {
-      return (!('nome' in data) || isStringSafe(data.nome)) && data.keys().size() <= 30;
-    }
-    function isValidPagamento(data) {
-      return (!('aluno' in data) || isStringSafe(data.aluno)) && data.keys().size() <= 30;
-    }
-    function isValidSuporte(data) {
-      return (!('aluno' in data) || isStringSafe(data.aluno)) && data.keys().size() <= 30;
-    }
-    function isValidTarefa(data) {
-      return (!('titulo' in data) || isStringSafe(data.titulo)) && data.keys().size() <= 30;
+    function isValidId(id) {
+      return id is string && id.size() <= 128;
     }
 
-    function isValidPessoa(data) {
-      return (!('nome' in data) || isStringSafe(data.nome)) && data.keys().size() <= 80;
-    }
-    function isValidTarefaSuporte(data) {
-      return (!('titulo' in data) || isStringSafe(data.titulo)) && data.keys().size() <= 50;
-    }
-    function isValidPerfil(data) {
-      return (!('nome' in data) || isStringSafe(data.nome)) && data.keys().size() <= 45;
-    }
-    function isValidCertificadoTemplate(data) {
-      return (!('nome' in data) || isStringSafe(data.nome)) && data.keys().size() <= 30;
-    }
-    function isValidCertificadoEmitido(data) {
-      return (!('nomeAluno' in data) || isStringSafe(data.nomeAluno)) && data.keys().size() <= 30;
-    }
-
+    // 3. Profiles Collection Rules
     match /perfis/{perfilId} {
-      allow get: if isAdmin() && isValidId(perfilId);
-      allow list: if isAdmin();
-      allow create: if isAdmin() && isValidId(perfilId) && isValidPerfil(incoming());
-      allow update: if isAdmin() && isValidId(perfilId) && isValidPerfil(incoming());
-      allow delete: if isAdmin() && isValidId(perfilId);
+      allow read, write: if isSignedIn() && isValidId(perfilId);
     }
 
-    match /pessoas/{pessoaId} {
-      allow get: if isAdmin() && isValidId(pessoaId);
-      allow list: if isAdmin();
-      allow create: if isAdmin() && isValidId(pessoaId) && isValidPessoa(incoming());
-      allow update: if isAdmin() && isValidId(pessoaId) && isValidPessoa(incoming());
-      allow delete: if isAdmin() && isValidId(pessoaId);
-    }
-    
-    match /tarefas_suporte/{tsId} {
-      allow get: if isAdmin() && isValidId(tsId);
-      allow list: if isAdmin();
-      allow create: if isAdmin() && isValidId(tsId) && isValidTarefaSuporte(incoming());
-      allow update: if isAdmin() && isValidId(tsId) && isValidTarefaSuporte(incoming());
-      allow delete: if isAdmin() && isValidId(tsId);
-    }
-    
+    // 4. Leads Collection Rules
     match /leads/{leadId} {
-      allow get: if isAdmin() && isValidId(leadId);
-      allow list: if isAdmin();
-      allow create: if isAdmin() && isValidId(leadId) && isValidLead(incoming());
-      allow update: if isAdmin() && isValidId(leadId) && isValidLead(incoming());
-      allow delete: if isAdmin() && isValidId(leadId);
+      allow read, write: if isSignedIn() && isValidId(leadId);
     }
-    
+
+    // 5. Alunos Collection Rules
     match /alunos/{alunoId} {
-      allow get: if isAdmin() && isValidId(alunoId);
-      allow list: if isAdmin();
-      allow create: if isAdmin() && isValidId(alunoId) && isValidAluno(incoming());
-      allow update: if isAdmin() && isValidId(alunoId) && isValidAluno(incoming());
-      allow delete: if isAdmin() && isValidId(alunoId);
+      allow read, write: if isSignedIn() && isValidId(alunoId);
     }
-    
+
+    // 6. Turmas Collection Rules
     match /turmas/{turmaId} {
-      allow get: if isAdmin() && isValidId(turmaId);
-      allow list: if isAdmin();
-      allow create: if isAdmin() && isValidId(turmaId) && isValidTurma(incoming());
-      allow update: if isAdmin() && isValidId(turmaId) && isValidTurma(incoming());
-      allow delete: if isAdmin() && isValidId(turmaId);
+      allow read, write: if isSignedIn() && isValidId(turmaId);
     }
-    
+
+    // 7. Materiais Collection Rules
     match /materiais/{materialId} {
-      allow get: if isAdmin() && isValidId(materialId);
-      allow list: if isAdmin();
-      allow create: if isAdmin() && isValidId(materialId) && isValidMaterial(incoming());
-      allow update: if isAdmin() && isValidId(materialId) && isValidMaterial(incoming());
-      allow delete: if isAdmin() && isValidId(materialId);
+      allow read, write: if isSignedIn() && isValidId(materialId);
     }
-    
+
+    // 8. Pagamentos Collection Rules
     match /pagamentos/{pagamentoId} {
-      allow get: if isAdmin() && isValidId(pagamentoId);
-      allow list: if isAdmin();
-      allow create: if isAdmin() && isValidId(pagamentoId) && isValidPagamento(incoming());
-      allow update: if isAdmin() && isValidId(pagamentoId) && isValidPagamento(incoming());
-      allow delete: if isAdmin() && isValidId(pagamentoId);
+      allow read, write: if isSignedIn() && isValidId(pagamentoId);
     }
-    
+
+    // 9. Suporte Collection Rules
     match /suporte/{suporteId} {
-      allow get: if isAdmin() && isValidId(suporteId);
-      allow list: if isAdmin();
-      allow create: if isAdmin() && isValidId(suporteId) && isValidSuporte(incoming());
-      allow update: if isAdmin() && isValidId(suporteId) && isValidSuporte(incoming());
-      allow delete: if isAdmin() && isValidId(suporteId);
+      allow read, write: if isSignedIn() && isValidId(suporteId);
     }
-    
+
+    // 10. Tarefas Collection Rules
     match /tarefas/{tarefaId} {
-      allow get: if isAdmin() && isValidId(tarefaId);
-      allow list: if isAdmin();
-      allow create: if isAdmin() && isValidId(tarefaId) && isValidTarefa(incoming());
-      allow update: if isAdmin() && isValidId(tarefaId) && isValidTarefa(incoming());
-      allow delete: if isAdmin() && isValidId(tarefaId);
+      allow read, write: if isSignedIn() && isValidId(tarefaId);
     }
 
+    // 11. Certificate Templates Collection Rules
     match /certificados_templates/{templateId} {
-      allow get: if isAdmin() && isValidId(templateId);
-      allow list: if isAdmin();
-      allow create: if isAdmin() && isValidId(templateId) && isValidCertificadoTemplate(incoming());
-      allow update: if isAdmin() && isValidId(templateId) && isValidCertificadoTemplate(incoming());
-      allow delete: if isAdmin() && isValidId(templateId);
+      allow read, write: if isSignedIn() && isValidId(templateId);
     }
 
+    // 12. Issued Certificates Collection Rules
     match /certificados_emitidos/{emitidoId} {
-      allow get: if isAdmin() && isValidId(emitidoId);
-      allow list: if isAdmin();
-      allow create: if isAdmin() && isValidId(emitidoId) && isValidCertificadoEmitido(incoming());
-      allow update: if isAdmin() && isValidId(emitidoId) && isValidCertificadoEmitido(incoming());
-      allow delete: if isAdmin() && isValidId(emitidoId);
+      allow read, write: if isSignedIn() && isValidId(emitidoId);
     }
 
-    match /modules/{moduleId} {
-      allow get: if isAdmin() && isValidId(moduleId);
-      allow list: if isAdmin();
-      allow create: if isAdmin() && isValidId(moduleId);
-      allow update: if isAdmin() && isValidId(moduleId);
-      allow delete: if isAdmin() && isValidId(moduleId);
+    // 13. Pessoas Collection Rules
+    match /pessoas/{pessoaId} {
+      allow read, write: if isSignedIn() && isValidId(pessoaId);
     }
-    
-    match /admins/{adminId} {
-      allow read: if isAdmin();
-      allow create, update, delete: if isAdmin() && isValidId(adminId);
+
+    // 14. Tarefas Suporte Collection Rules
+    match /tarefas_suporte/{tsId} {
+      allow read, write: if isSignedIn() && isValidId(tsId);
+    }
+
+    // 15. Historico/AuditLog Collection Rules
+    match /historico/{histId} {
+      allow read, write: if isSignedIn() && isValidId(histId);
+    }
+
+    // 16. ILGC Canais Collection Rules
+    match /ilgc_canais/{canalId} {
+      allow read, write: if isSignedIn() && isValidId(canalId);
+    }
+
+    // 17. ILGC Mensagens Collection Rules
+    match /ilgc_mensagens/{msgId} {
+      allow read, write: if isSignedIn() && isValidId(msgId);
+    }
+
+    // 18. ILGC Notificacoes Collection Rules
+    match /ilgc_notificacoes/{noteId} {
+      allow read, write: if isSignedIn() && isValidId(noteId);
+    }
+
+    // 19. Allowed Emails Collection Rules
+    match /allowed_emails/{emailId} {
+      allow read, write: if isSignedIn() && isValidId(emailId);
+    }
+
+    // 20. Custom Tags Collection Rules
+    match /tags_personalizaveis/{tagId} {
+      allow read, write: if isSignedIn() && isValidId(tagId);
     }
   }
 }

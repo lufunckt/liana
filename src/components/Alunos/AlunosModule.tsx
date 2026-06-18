@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useStore } from '../../store';
-import { Search, Check, X as XIcon, List, Grid, GraduationCap, Mail, Phone, MessageCircle, CheckCircle2, XCircle } from 'lucide-react';
+import { Search, Check, X as XIcon, List, Grid, GraduationCap, Mail, Phone, MessageCircle, CheckCircle2, XCircle, FileDown } from 'lucide-react';
 import { PessoaFicha } from '../Pessoas/PessoaFicha';
+import { exportToCsv } from '../../lib/csv';
 
 export function AlunosModule() {
   const { data } = useStore();
@@ -32,6 +33,15 @@ export function AlunosModule() {
         <div>
           <h1 className="text-2xl font-bold text-[#0A192F]">Jornada do Aluno</h1>
           <p className="text-slate-500 text-sm">Acompanhamento de Onboarding e Acessos ({filtered.length})</p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => exportToCsv(`export-alunos-${new Date().toISOString().split('T')[0]}.csv`, filtered, ['nome', 'email', 'telefone', 'turma', 'produtoComprado', 'status'])}
+            className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-lg flex items-center gap-1.5 transition"
+          >
+            <FileDown className="w-4 h-4 text-[#1D4E89]" /> Exportar CSV
+          </button>
         </div>
       </div>
 

@@ -24,8 +24,47 @@ export function PlanilhaGrid({
   onUpdateRegistros, 
   onUpdateColunas 
 }: PlanilhaGridProps) {
-  const { data, updateModuleData } = useStore();
+  const { data, updateModuleData, addSingleDocument } = useStore();
   const pessoas = data.pessoas || [];
+
+  // Automatically sync row records representing people to Base de Pessoas
+  const syncRowToPessoasBase = async (row: Record<string, any>) => {
+    if (!colunas || colunas.length === 0) return;
+    
+    const pCol = colunas.find(c => c.type === 'rel_pessoa' || c.key === 'nome' || c.key.includes('completo') || c.key.includes('aluno') || c.key.includes('lead'));
+    const telCol = colunas.find(c => c.type === 'telefone' || c.key === 'whats' || c.key.includes('whats') || c.key.includes('telefone') || c.key.includes('celular'));
+    const emailCol = colunas.find(c => c.type === 'email' || c.key === 'email' || c.key.includes('email') || c.key.includes('mail'));
+    const statusCol = colunas.find(c => c.type === 'status' || c.key.includes('status') || c.key.includes('comercial'));
+
+    if (!pCol) return;
+
+    const rawName = String(row[pCol.key] || '').trim();
+    if (rawName && rawName.toLowerCase() !== 'sem nome') {
+      const exists = pessoas.some(p => p.nome?.trim().toLowerCase() === rawName.toLowerCase());
+      if (!exists) {
+        const rawTel = telCol ? String(row[telCol.key] || '').trim() : '';
+        const rawEmail = emailCol ? String(row[emailCol.key] || '').trim() : '';
+        const rawStatus = statusCol ? String(row[statusCol.key] || '').trim() : '';
+
+        const newPerson = {
+          id: `pessoa-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          nome: rawName,
+          telefone: rawTel || 'Sem telefone',
+          email: rawEmail || 'Sem e-mail',
+          tipoPessoa: nome.toLowerCase().includes('lead') ? 'lead' : 'aluna',
+          status: rawStatus || 'novo',
+          interacoes: [
+            { 
+              text: `Pessoa cadastrada automaticamente via planilha: ${nome}`, 
+              date: new Date().toLocaleDateString('pt-BR'), 
+              type: 'system' 
+            }
+          ]
+        };
+        await addSingleDocument('pessoas', newPerson);
+      }
+    }
+  };
 
   // Active view: 'tabela' | 'cards' | 'kanban' | 'calendario' | 'lista'
   const [viewType, setViewType] = useState<'tabela' | 'cards' | 'kanban' | 'calendario' | 'lista'>('tabela');
@@ -190,6 +229,9 @@ export function PlanilhaGrid({
     };
     onUpdateRegistros(updated);
     
+    // Automatically replicate/create person in Unified Base de Pessoas
+    syncRowToPessoasBase(updated[rowIndex]);
+    
     // Clear inline locks
     setEditingRowIndex(null);
     setEditingField(null);
@@ -206,6 +248,9 @@ export function PlanilhaGrid({
     e.preventDefault();
     onUpdateRegistros([...registros, newRowForm]);
     setIsFormOpen(false);
+
+    // Automatically replicate/create person in Unified Base de Pessoas
+    syncRowToPessoasBase(newRowForm);
 
     // Reset Form
     const emptyForm: Record<string, any> = {};

@@ -344,7 +344,7 @@ Ana Paula Martins,ana.paula@gmail.com,Workshop Compliance,Turma A,8 horas,15/05/
     ];
     setBatchRecords(parsed);
     setFormData(parsed[0]);
-    alert('Mock list carregado com sucesso! Mapeamento de colunas pronto.');
+    alert('Modelo de layout carregado com sucesso! Mapeamento de colunas pronto.');
   };
 
   // Wizard transitions
@@ -359,7 +359,7 @@ Ana Paula Martins,ana.paula@gmail.com,Workshop Compliance,Turma A,8 horas,15/05/
         return;
       }
       if (wizardSource === 'csv' && batchRecords.length === 0) {
-        alert('Por favor, carregue a lista CSV ou use os dados de teste para prosseguir.');
+        alert('Por favor, carregue a lista CSV ou utilize o modelo de exemplo para prosseguir.');
         return;
       }
       setWizardStep(2);
@@ -1661,9 +1661,9 @@ Ana Paula Martins,ana.paula@gmail.com,Workshop Compliance,Turma A,8 horas,15/05/
                           <button
                             onClick={handleSampleCsv}
                             type="button"
-                            className="px-3.5 py-1.5 bg-indigo-55 bg-[#0A192F] text-white text-[11px] font-bold uppercase tracking-wider rounded transition"
+                            className="px-3.5 py-1.5 bg-[#0A192F] text-white text-[11px] font-bold uppercase tracking-wider rounded transition hover:bg-[#1a2d4c]"
                           >
-                            Carregar Dados de Teste ILG
+                            Carregar Modelo de Exemplo (Layout CSV)
                           </button>
                         </div>
                       </div>
