@@ -396,6 +396,36 @@ export function PessoaFicha({ pessoa, onClose }: { pessoa: any, onClose: () => v
           newStatus: normalizeStatusSlug(status) 
         });
       }
+
+      const changedFields: string[] = [];
+      if (nome !== (pessoa.nome || '')) changedFields.push('Nome');
+      if (email !== (pessoa.email || '')) changedFields.push('E-mail');
+      const oldPhone = pessoa.telefone || '';
+      const newPhone = customPhone || telefone || '';
+      if (newPhone !== oldPhone) changedFields.push('Telefone');
+      if (responsavel !== (pessoa.responsavel || '')) changedFields.push('Responsável');
+      
+      if (changedFields.length > 0) {
+        try {
+          await logAuditEvent('alteracao_dados_pessoa', pessoa.id, {
+            campos: changedFields,
+            p_anterior: {
+              nome: pessoa.nome || '',
+              email: pessoa.email || '',
+              telefone: oldPhone,
+              responsavel: pessoa.responsavel || ''
+            },
+            p_novo: {
+              nome,
+              email,
+              telefone: newPhone,
+              responsavel
+            }
+          });
+        } catch (e) {
+          console.error("Erro ao registrar log de auditoria ao atualizar dados da pessoa", e);
+        }
+      }
       
       showToast('Cadastro operacional salvo com sucesso no Firestore!', 'success');
       onClose();

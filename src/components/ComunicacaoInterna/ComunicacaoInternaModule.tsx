@@ -124,6 +124,20 @@ export function ComunicacaoInternaModule() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    const handleSetCanal = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail) {
+        setActiveChannelId(customEvent.detail);
+        setMobileView('chat');
+      }
+    };
+    window.addEventListener('set_comunicacao_canal', handleSetCanal);
+    return () => {
+      window.removeEventListener('set_comunicacao_canal', handleSetCanal);
+    };
+  }, []);
+
   // Match the logged-in collaborator on boot & dynamic profiles changes
   useEffect(() => {
     const profileId = localStorage.getItem('ilg_selected_profile') || 'luiza';

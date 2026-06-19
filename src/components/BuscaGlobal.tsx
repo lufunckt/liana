@@ -80,12 +80,18 @@ export function BuscaGlobal() {
       : [];
 
     const filteredMateriais = hasQuery
-      ? materiais.filter(m => 
-          m.titulo?.toLowerCase().includes(query) ||
-          m.descricao?.toLowerCase().includes(query) ||
-          m.tipo?.toLowerCase().includes(query) ||
-          m.url?.toLowerCase().includes(query)
-        )
+      ? materiais.filter(m => {
+          const nomeStr = m.nome ?? m.titulo ?? '';
+          const descStr = m.descricao ?? '';
+          const catStr = m.categoria ?? m.tipo ?? '';
+          const linkStr = m.link ?? m.linkDrive ?? m.url ?? '';
+          return (
+            nomeStr.toLowerCase().includes(query) ||
+            descStr.toLowerCase().includes(query) ||
+            catStr.toLowerCase().includes(query) ||
+            linkStr.toLowerCase().includes(query)
+          );
+        })
       : [];
 
     const filteredCertificados = hasQuery
@@ -498,9 +504,10 @@ export function BuscaGlobal() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {results.materiais.map((m) => {
                       const isHighlighted = flatItems[highlightedIndex]?.id === `material-${m.id}`;
+                      const targetUrl = m.link ?? m.linkDrive ?? m.url;
                       const handleAction = () => {
-                        if (m.url) {
-                          window.open(m.url, '_blank', 'noreferrer,noopener');
+                        if (targetUrl) {
+                          window.open(targetUrl, '_blank', 'noreferrer,noopener');
                         }
                       };
                       return (
@@ -510,19 +517,19 @@ export function BuscaGlobal() {
                           onClick={handleAction}
                           className={cn(
                             "p-3.5 border rounded-xl flex flex-col justify-between transition-all duration-200",
-                            m.url ? "cursor-pointer" : "",
+                            targetUrl ? "cursor-pointer" : "",
                             isHighlighted 
                               ? "border-[#D4AF37] bg-amber-50/50 ring-2 ring-[#D4AF37]/35 shadow-sm scale-[1.01]" 
                               : "border-slate-105 bg-slate-50/50 hover:bg-slate-50/80"
                           )}
                         >
                           <div>
-                            <span className="text-[9px] bg-emerald-105 px-1.5 py-0.2 rounded font-extrabold text-emerald-850 uppercase">{m.tipo || 'Material'}</span>
-                            <h4 className="font-bold text-slate-800 text-xs mt-1.5">{m.titulo}</h4>
-                            {m.descricao && <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">{m.descricao}</p>}
+                            <span className="text-[9px] bg-emerald-105 px-1.5 py-0.2 rounded font-extrabold text-emerald-850 uppercase">{m.categoria || m.tipo || 'Material'}</span>
+                            <h4 className="font-bold text-slate-800 text-xs mt-1.5">{m.nome ?? m.titulo}</h4>
+                            {m.descricao && <p className="text-[11px] text-slate-505 mt-1 line-clamp-2">{m.descricao}</p>}
                           </div>
 
-                          {m.url && (
+                          {targetUrl && (
                             <button 
                               type="button"
                               onClick={(e) => { e.stopPropagation(); handleAction(); }}

@@ -42,6 +42,10 @@ export function ColecaoLogsAuditoria({ historico, perfis }: ColecaoLogsAuditoria
       case 'cadastro_pessoa': return 'Cadastro de Aluno/Lead';
       case 'status_update': return 'Atualização de CRM';
       case 'view_ficha': return 'Visualização de Ficha';
+      case 'alteracao_dados_pessoa': return 'Alteração de Cadastro';
+      case 'cadastro_tag': return 'Criação de Tag';
+      case 'edicao_tag': return 'Edição de Tag';
+      case 'exclusao_tag': return 'Exclusão de Tag';
       case 'recebimento_confirmado': return 'Recebimento Confirmado';
       case 'exclusao_pagamento': return 'Exclusão de Pagamento';
       case 'atualizacao_pagamento': return 'Edição de Pagamento';
@@ -57,6 +61,7 @@ export function ColecaoLogsAuditoria({ historico, perfis }: ColecaoLogsAuditoria
     switch (action) {
       case 'cadastro_pessoa':
       case 'cadastro_pagamento':
+      case 'cadastro_tag':
         return 'bg-emerald-50 text-emerald-800 border-emerald-200';
       case 'recebimento_confirmado':
       case 'ativacao_canal_real_comunicacoes':
@@ -64,10 +69,12 @@ export function ColecaoLogsAuditoria({ historico, perfis }: ColecaoLogsAuditoria
       case 'status_update':
       case 'view_ficha':
         return 'bg-blue-50 text-blue-800 border-blue-200';
-      case 'exclusao_pagamento':
-        return 'bg-rose-50 text-rose-800 border-rose-200';
-      case 'atualizacao_pagamento':
+      case 'alteracao_dados_pessoa':
+      case 'edicao_tag':
         return 'bg-amber-50 text-amber-800 border-amber-200';
+      case 'exclusao_pagamento':
+      case 'exclusao_tag':
+        return 'bg-rose-50 text-rose-800 border-rose-200';
       default:
         return 'bg-slate-50 text-slate-800 border-slate-200';
     }
@@ -352,7 +359,20 @@ export function ColecaoLogsAuditoria({ historico, perfis }: ColecaoLogsAuditoria
 
                   {/* Description helper string */}
                   <span className="text-xs font-bold text-slate-800">
-                    {userName} {log.action === 'view_ficha' ? 'inspecionou cadastro' : log.action === 'status_update' ? 'atualizou ficha de contato' : log.action === 'cadastro_pessoa' ? 'criou perfil no CRM' : log.action === 'recebimento_confirmado' ? 'confirmou recebimento' : 'modificou dados institucionais'}
+                    {userName} {
+                      log.action === 'view_ficha' ? 'inspecionou cadastro' :
+                      log.action === 'status_update' ? 'atualizou ficha de contato' :
+                      log.action === 'cadastro_pessoa' ? 'criou perfil no CRM' :
+                      log.action === 'alteracao_dados_pessoa' ? 'alterou dados cadastrais' :
+                      log.action === 'cadastro_tag' ? 'criou nova tag personalizável' :
+                      log.action === 'edicao_tag' ? 'editou tag personalizável' :
+                      log.action === 'exclusao_tag' ? 'excluiu tag personalizável' :
+                      log.action === 'recebimento_confirmado' ? 'confirmou recebimento' :
+                      log.action === 'exclusao_pagamento' ? 'excluiu cobrança/parcela' :
+                      log.action === 'atualizacao_pagamento' ? 'editou dados de pagamento' :
+                      log.action === 'cadastro_pagamento' ? 'gerou nova cobrança' :
+                      'modificou dados institucionais'
+                    }
                   </span>
 
                   {log.details && log.details.nome && (

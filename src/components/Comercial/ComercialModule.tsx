@@ -3,6 +3,7 @@ import { useStore } from '../../store';
 import { Search, List, Grid, Trello, User, Calendar, MessageCircle, Mail, Phone, Flame, ChevronRight, Plus, X, FileText } from 'lucide-react';
 import { PessoaFicha } from '../Pessoas/PessoaFicha';
 import { showToast } from '../../lib/utils';
+import { logAuditEvent } from '../../lib/audit';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -162,7 +163,20 @@ export function ComercialModule() {
       };
 
       if (typeof addSingleDocument === 'function') {
-        await addSingleDocument('pessoas', newLead);
+        const docId = await addSingleDocument('pessoas', newLead);
+        try {
+          await logAuditEvent('cadastro_pessoa', docId || newLead.id, {
+            nome: newLead.nome,
+            email: newLead.email,
+            telefone: newLead.telefone,
+            responsavel: newLead.responsavel,
+            tipo: newLead.tipoPessoa,
+            origem: newLead.origem,
+            via: 'Módulo Comercial'
+          });
+        } catch (e) {
+          console.error("Erro ao registrar log de auditoria ao cadastrar lead comercial", e);
+        }
       } else {
         throw new Error('Função addSingleDocument não disponível no useStore.');
       }

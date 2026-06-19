@@ -3,7 +3,8 @@ import {
   LayoutDashboard, Users, UserCheck, BookOpen, FileText, CreditCard, 
   LifeBuoy, CheckSquare, LogOut, Menu, X, RefreshCw, Briefcase, 
   DollarSign, MessageSquare, FileSpreadsheet, Award, Video, Sparkles, 
-  UserCircle, Search, HelpCircle, Hammer, Shield, Eye, Bell, Layers, BarChart3, Tag
+  UserCircle, Search, HelpCircle, Hammer, Shield, Eye, Bell, Layers, BarChart3, Tag,
+  TrendingUp
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { syncNow, useStore } from '../store';
@@ -25,11 +26,104 @@ export function Layout({ children, activeTab, setActiveTab, onLogout, selectedPr
   // Search and Notification visibility states
   const [searchOpen, setSearchOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [profileNotificationsOpen, setProfileNotificationsOpen] = useState(false);
+  const [headerSearch, setHeaderSearch] = useState('');
+  const [showResultsDropdown, setShowResultsDropdown] = useState(false);
 
   const { data, isLocalFallbackMode, isOnline } = useStore();
   const pessoas = data.pessoas || [];
   const tarefas = data.tarefas_suporte || [];
   const pagamentos = data.pagamentos || [];
+
+  const getProfileHandle = (profileId: string | null | undefined) => {
+    if (!profileId) return '';
+    const profileLower = profileId.toLowerCase();
+    if (profileLower.includes('liana')) return '@Liana';
+    if (profileLower.includes('nuria')) return '@Nuria';
+    if (profileLower.includes('ana')) return '@Ana';
+    if (profileLower.includes('luiza')) return '@Luiza';
+    return `@${profileId}`;
+  };
+
+  const isTaskAssignedToMe = (t: any, profileId: string | null | undefined) => {
+    if (!profileId) return false;
+    const rawResp = (t.responsavel || t.colaborador || '').toLowerCase().trim();
+    const rawId = profileId.toLowerCase().trim();
+    
+    if (rawResp.includes(rawId)) return true;
+    if (rawId.includes(rawResp) && rawResp.length > 2) return true;
+    
+    if (rawId.includes('liana') && (rawResp.includes('liana') || rawResp.includes('director'))) return true;
+    if (rawId.includes('nuria') && (rawResp.includes('nuria') || rawResp.includes('núria') || rawResp.includes('onboarding'))) return true;
+    if (rawId.includes('ana') && (rawResp.includes('ana') || rawResp.includes('comercial'))) return true;
+    if (rawId.includes('luiza') && (rawResp.includes('luiza') || rawResp.includes('coordena'))) return true;
+    
+    return false;
+  };
+
+  const myPendingNotifications = useMemo(() => {
+    if (!selectedProfile) return [];
+    const list: any[] = [];
+    const handle = getProfileHandle(selectedProfile).toLowerCase();
+
+    // 1. Uncompleted Tasks assigned to me
+    tarefas.forEach(t => {
+      const isCompleted = t.status === 'concluído' || t.status === 'resolvido' || t.status === 'feito';
+      if (!isCompleted && isTaskAssignedToMe(t, selectedProfile)) {
+        list.push({
+          id: `profile-task-${t.id}`,
+          type: 'task',
+          title: t.titulo,
+          description: t.descricao || 'Sem descrição.',
+          date: t.prazo || 'Sem prazo',
+          origin: t.categoria || 'Tarefa',
+          originalRecord: t,
+        });
+      }
+    });
+
+    // 2. Mentions in Communication Module
+    const messages = data.ilgc_mensagens || [];
+    messages.forEach(m => {
+      if (m.autorId !== selectedProfile) {
+        if (m.texto && m.texto.toLowerCase().includes(handle)) {
+          const channel = (data.ilgc_canais || []).find((c: any) => c.id === m.channelId);
+          list.push({
+            id: `profile-mention-msg-${m.id}`,
+            type: 'mention',
+            title: `Mencionada por ${m.autorNome}`,
+            description: m.texto,
+            date: m.dataHora || '',
+            origin: channel ? `#${channel.nome}` : '#geral',
+            originalRecord: m,
+            channelId: m.channelId
+          });
+        }
+        
+        if (m.replies && m.replies.length > 0) {
+          m.replies.forEach(rep => {
+            if (rep.autorId !== selectedProfile && rep.texto && rep.texto.toLowerCase().includes(handle)) {
+              const channel = (data.ilgc_canais || []).find((c: any) => c.id === m.channelId);
+              list.push({
+                id: `profile-mention-rep-${rep.id}`,
+                type: 'mention',
+                title: `Mencionada em Thread por ${rep.autorNome}`,
+                description: rep.texto,
+                date: rep.dataHora || '',
+                origin: channel ? `#${channel.nome}` : '#geral',
+                originalRecord: m,
+                channelId: m.channelId
+              });
+            }
+          });
+        }
+      }
+    });
+
+    return list;
+  }, [selectedProfile, tarefas, data.ilgc_mensagens, data.ilgc_canais]);
+
+  const myPendingNotificationsCount = myPendingNotifications.length;
 
   // Helper date parsing for alarms
   const todayStr = useMemo(() => {
@@ -71,6 +165,129 @@ export function Layout({ children, activeTab, setActiveTab, onLogout, selectedPr
 
     return count;
   }, [pessoas, tarefas, pagamentos, todayStr]);
+
+  const matchedResults = useMemo(() => {
+    if (!headerSearch.trim() || headerSearch.trim().length < 2) return null;
+    const query = headerSearch.toLowerCase().trim();
+
+    const matchVal = (val: any, q: string) => {
+      if (!val) return false;
+      return String(val).toLowerCase().includes(q);
+    };
+
+    const turmasList = data.turmas || [];
+    const materiaisList = data.materiais || [];
+    const pagamentosList = data.pagamentos || [];
+    const tarefasSuporteList = data.tarefas_suporte || [];
+
+    return {
+      leads: pessoas.filter(p => 
+        p.tipoPessoa === 'lead' && (
+          matchVal(p.nome, query) ||
+          matchVal(p.email, query) ||
+          matchVal(p.telefone, query) ||
+          matchVal(p.status, query) ||
+          matchVal(p.produtoInteresse, query) ||
+          matchVal(p.responsavel, query)
+        )
+      ),
+      alunos: pessoas.filter(p => 
+        p.tipoPessoa === 'aluna' && (
+          matchVal(p.nome, query) ||
+          matchVal(p.email, query) ||
+          matchVal(p.telefone, query) ||
+          matchVal(p.turma, query) ||
+          matchVal(p.produtoComprado, query) ||
+          matchVal(p.formacao, query)
+        )
+      ),
+      turmas: turmasList.filter(t => 
+        matchVal(t.nome, query) || 
+        matchVal(t.formacao, query) || 
+        matchVal(t.status, query)
+      ),
+      materiais: materiaisList.filter(m => {
+        const nomeStr = m.nome ?? m.titulo ?? '';
+        const catStr = m.categoria ?? m.tipo ?? '';
+        return (
+          matchVal(nomeStr, query) ||
+          matchVal(catStr, query) ||
+          matchVal(m.responsavel, query)
+        );
+      }),
+      pagamentos: pagamentosList.filter(pag => 
+        matchVal(pag.aluno, query) || 
+        matchVal(pag.formacao, query) || 
+        matchVal(pag.status, query)
+      ),
+      suporte: tarefasSuporteList.filter(t => 
+        t.tipo === 'suporte' && (
+          matchVal(t.titulo, query) || 
+          matchVal(t.descricao, query) || 
+          matchVal(t.categoria, query)
+        )
+      ),
+      tarefas: tarefasSuporteList.filter(t => 
+        t.tipo === 'tarefa' && (
+          matchVal(t.titulo, query) || 
+          matchVal(t.descricao, query) || 
+          matchVal(t.prioridade, query)
+        )
+      )
+    };
+  }, [headerSearch, pessoas, data]);
+
+  const totalFound = useMemo(() => {
+    if (!matchedResults) return 0;
+    return (
+      matchedResults.leads.length +
+      matchedResults.alunos.length +
+      matchedResults.turmas.length +
+      matchedResults.materiais.length +
+      matchedResults.pagamentos.length +
+      matchedResults.suporte.length +
+      matchedResults.tarefas.length
+    );
+  }, [matchedResults]);
+
+  const handleDropdownRowAction = (type: string, item: any) => {
+    setHeaderSearch('');
+    setShowResultsDropdown(false);
+
+    if (type === 'lead' || type === 'aluno') {
+      window.dispatchEvent(new CustomEvent('open_pessoa_ficha', { detail: item }));
+    } else if (type === 'turma') {
+      setActiveTab('certificados');
+    } else if (type === 'material') {
+      const url = item.linkDrive || item.link;
+      if (url) {
+        window.open(url, '_blank', 'noreferrer,noopener');
+      } else {
+        setActiveTab('materiais');
+      }
+    } else if (type === 'pagamento') {
+      const matched = pessoas.find(p => p.nome && item.aluno && p.nome.toLowerCase().trim() === item.aluno.toLowerCase().trim());
+      if (matched) {
+        window.dispatchEvent(new CustomEvent('open_pessoa_ficha', { detail: matched }));
+      } else {
+        setActiveTab('financeiro');
+      }
+    } else if (type === 'suporte') {
+      const matched = pessoas.find(p => p.id === item.pessoaId || (p.email && item.email && p.email.toLowerCase() === item.email.toLowerCase()));
+      if (matched) {
+        window.dispatchEvent(new CustomEvent('open_pessoa_ficha', { detail: matched }));
+      } else {
+        setActiveTab('alunos');
+      }
+    } else if (type === 'tarefa') {
+      const matched = pessoas.find(p => p.id === item.pessoaId);
+      if (matched) {
+        window.dispatchEvent(new CustomEvent('open_pessoa_ficha', { detail: matched }));
+      } else {
+        setActiveTab('prioridades_hoje');
+      }
+    }
+  };
 
   // Swipe Gestures for Mobile Navigation between Main Tab Modules
   const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
@@ -169,6 +386,7 @@ export function Layout({ children, activeTab, setActiveTab, onLogout, selectedPr
         { id: 'meu_painel', label: 'Meu Painel', icon: UserCircle },
         { id: 'meu_perfil', label: 'Meu Perfil', icon: UserCircle },
         { id: 'relatorio_performance', label: 'Performance', icon: BarChart3 },
+        { id: 'relatorio_engajamento', label: 'Engajamento por Origem', icon: TrendingUp },
         { id: 'prioridades_hoje', label: 'Prioridades de Hoje', icon: CheckSquare },
         { id: 'busca_global', label: 'Busca Global', icon: Search },
         { id: 'tag_manager', label: 'Gerenciador de Tags', icon: Tag }
@@ -295,18 +513,105 @@ export function Layout({ children, activeTab, setActiveTab, onLogout, selectedPr
       {/* Profile HUD & Workplace mode selector */}
       <div className="p-4 space-y-3 border-b border-slate-800/80">
         {selectedProfile && (
-          <div className="bg-slate-800/40 border border-slate-700/30 rounded-xl p-2.5 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#D4AF37] to-indigo-900 text-white flex items-center justify-center font-black text-xs shadow-md overflow-hidden shrink-0">
-              {getProfilePhoto(selectedProfile) ? (
-                <img src={getProfilePhoto(selectedProfile)!} alt="Profile" className="w-full h-full object-cover" />
-              ) : (
-                getProfileName(selectedProfile).charAt(0)
-              )}
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-bold text-slate-400 leading-none">Acesso</p>
-              <p className="text-xs font-black text-slate-200 truncate mt-0.5">{getProfileName(selectedProfile)}</p>
-            </div>
+          <div className="relative">
+            <button 
+              type="button"
+              onClick={() => setProfileNotificationsOpen(!profileNotificationsOpen)}
+              className="w-full text-left bg-slate-800/40 hover:bg-slate-800/70 border border-slate-700/30 rounded-xl p-2.5 flex items-center gap-3 transition cursor-pointer focus:outline-none relative"
+            >
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#D4AF37] to-indigo-900 text-white flex items-center justify-center font-black text-xs shadow-md overflow-hidden shrink-0 relative">
+                {getProfilePhoto(selectedProfile) ? (
+                  <img src={getProfilePhoto(selectedProfile)!} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  getProfileName(selectedProfile).charAt(0)
+                )}
+                {myPendingNotificationsCount > 0 && (
+                  <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-rose-500 rounded-full border border-slate-850 animate-pulse" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-bold text-slate-400 leading-none">Acesso</p>
+                  {myPendingNotificationsCount > 0 && (
+                    <span className="text-[9px] bg-rose-500 text-white font-extrabold px-1.5 py-0.5 rounded-full leading-none scale-90">
+                      {myPendingNotificationsCount}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs font-black text-slate-200 truncate mt-1">{getProfileName(selectedProfile)}</p>
+                <p className="text-[9px] text-[#D4AF37] font-bold font-mono tracking-wider uppercase mt-0.5">{getProfileHandle(selectedProfile)}</p>
+              </div>
+            </button>
+            
+            {profileNotificationsOpen && (
+              <div className="absolute left-0 bottom-full mb-2 w-[280px] bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden text-left flex flex-col max-h-[420px] animate-in fade-in slide-in-from-bottom-2 duration-200">
+                <div className="p-3 bg-[#0A192F] text-white flex items-center justify-between select-none">
+                  <span className="text-xs font-black text-slate-100 flex items-center gap-1.5">
+                    <UserCircle className="w-4 h-4 text-[#D4AF37]" /> Pendências de {getProfileName(selectedProfile)}
+                  </span>
+                  <button 
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setProfileNotificationsOpen(false);
+                    }}
+                    className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-850 transition"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto p-2.5 space-y-2 max-h-[300px] bg-stone-50">
+                  {myPendingNotifications.length === 0 ? (
+                    <div className="p-5 text-center space-y-1.5 select-none">
+                      <span className="text-xl">✅</span>
+                      <p className="text-xs font-extrabold text-slate-700">Tudo em dia!</p>
+                      <p className="text-[10px] text-slate-550">Nenhuma tarefa pendente ou menção no chat sob seu perfil.</p>
+                    </div>
+                  ) : (
+                    myPendingNotifications.map(n => (
+                      <button
+                        key={n.id}
+                        type="button"
+                        onClick={() => {
+                          setProfileNotificationsOpen(false);
+                          if (n.type === 'task') {
+                            setActiveTab('prioridades_hoje');
+                          } else {
+                            setActiveTab('comunicacao_interna');
+                            if (n.channelId) {
+                              setTimeout(() => {
+                                window.dispatchEvent(new CustomEvent('set_comunicacao_canal', { detail: n.channelId }));
+                              }, 150);
+                            }
+                          }
+                        }}
+                        className="w-full text-left p-2.5 bg-white hover:bg-[#D4AF37]/5 border border-slate-200 rounded-xl hover:border-[#D4AF37]/30 transition flex gap-2 items-start shadow-2xs group cursor-pointer"
+                      >
+                        <div className={cn(
+                          "p-1.5 rounded-lg shrink-0 mt-0.5",
+                          n.type === 'task' ? "bg-amber-50 text-amber-600 border border-amber-100" : "bg-blue-50 text-blue-600 border border-blue-100"
+                        )}>
+                          {n.type === 'task' ? <CheckSquare className="w-3.5 h-3.5" /> : <MessageSquare className="w-3.5 h-3.5" />}
+                        </div>
+                        <div className="flex-1 min-w-0 text-left">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-[9px] font-extrabold text-[#1F4E89] bg-slate-100 px-1.5 py-0.2 rounded font-mono uppercase">{n.origin}</span>
+                            <span className="text-[9px] text-slate-400 font-mono">{n.date.split(' ')[0]}</span>
+                          </div>
+                          <p className="text-xs font-black text-slate-800 leading-snug mt-1 truncate group-hover:text-indigo-800 transition">{n.title}</p>
+                          <p className="text-[10px] text-slate-500 leading-normal mt-0.5 truncate">{n.description}</p>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+                
+                <div className="p-2 bg-stone-100 text-center text-[9px] text-slate-500 font-bold border-t border-slate-200 select-none">
+                  Total de {myPendingNotifications.length} pendências operacionais
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -342,6 +647,9 @@ export function Layout({ children, activeTab, setActiveTab, onLogout, selectedPr
                   .filter(item => {
                     if (item.id === 'relatorio_performance') {
                       return selectedProfile === 'liana' || selectedProfile === 'ericocavalheiro.psico';
+                    }
+                    if (item.id === 'relatorio_engajamento') {
+                      return selectedProfile === 'liana' || selectedProfile === 'luiza' || selectedProfile === 'ericocavalheiro.psico';
                     }
                     return true;
                   })
@@ -432,26 +740,213 @@ export function Layout({ children, activeTab, setActiveTab, onLogout, selectedPr
               <Menu className="w-5 h-5" />
             </button>
             
-            {/* Quick search global trigger input - visible on all pages */}
-            <div className="relative hidden sm:block w-72">
+            {/* Interactive Always-Visible Search Bar (both mobile and desktop) */}
+            <div className="relative w-40 xs:w-52 sm:w-72 md:w-80 z-40">
               <input 
                 type="text"
-                placeholder="Pesquisa unificada em tudo..."
-                onClick={() => setSearchOpen(true)}
-                className="w-full border border-slate-200 bg-slate-50 hover:bg-slate-100 rounded-lg py-1.5 pl-9 pr-3 text-xs outline-none cursor-pointer text-slate-700 font-bold"
-                readOnly
+                placeholder="Pesquisa unificada..."
+                value={headerSearch}
+                onChange={e => {
+                  setHeaderSearch(e.target.value);
+                  setShowResultsDropdown(true);
+                }}
+                onFocus={() => setShowResultsDropdown(true)}
+                className="w-full border border-slate-205 bg-slate-50 hover:bg-slate-100 rounded-lg py-1.5 pl-8 pr-7 text-xs outline-none text-slate-705 font-bold transition-all focus:bg-white focus:ring-1 focus:ring-[#0A192F]/20 focus:border-[#0A192F]"
               />
-              <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
+              {headerSearch && (
+                <button 
+                  onClick={() => setHeaderSearch('')} 
+                  className="absolute right-2 top-2 p-0.5 rounded-full text-slate-400 hover:text-slate-750 hover:bg-slate-205"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+
+              {/* Float Dropdown Menu */}
+              {showResultsDropdown && headerSearch.trim().length >= 2 && (
+                <div className="absolute left-0 mt-2 bg-white rounded-xl border border-slate-200 shadow-2xl z-55 max-h-96 overflow-y-auto p-3 space-y-4 animate-in fade-in slide-in-from-top-1 duration-150 w-[280px] xs:w-[320px] sm:w-[450px] md:w-[500px]">
+                  <div className="flex items-center justify-between text-[10px] font-bold text-slate-404 uppercase tracking-widest pb-1.5 border-b border-slate-100 select-none">
+                    <span>Resultados ({totalFound})</span>
+                    <span>Módulo de Origem</span>
+                  </div>
+
+                  {totalFound === 0 ? (
+                    <div className="text-center py-6 text-xs text-slate-500 italic leading-snug">
+                      Nenhum registro localizado para "{headerSearch}"
+                    </div>
+                  ) : (
+                    <div className="space-y-3.5 pr-1">
+                      {/* LEADS */}
+                      {matchedResults?.leads && matchedResults.leads.length > 0 && (
+                        <div className="space-y-1.5">
+                          <span className="text-[9px] font-black uppercase text-orange-600 tracking-wider flex items-center gap-1 select-none">
+                            <Briefcase className="w-3 h-3 text-orange-600" /> Leads Comerciais
+                          </span>
+                          {matchedResults.leads.slice(0, 3).map((item: any) => (
+                            <div 
+                              key={item.id}
+                              onClick={() => handleDropdownRowAction('lead', item)}
+                              className="p-2 hover:bg-orange-50/50 rounded-lg border border-transparent hover:border-orange-100 transition duration-150 cursor-pointer flex justify-between items-center text-left"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-bold text-slate-800 truncate">{item.nome}</p>
+                                <p className="text-[10px] text-slate-500 truncate">{item.email || 'Sem e-mail'} • {item.telefone || 'Sem fone'}</p>
+                              </div>
+                              <span className="text-[8px] font-extrabold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 select-none uppercase tracking-wider shrink-0 ml-2">Lead</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* ALUNOS */}
+                      {matchedResults?.alunos && matchedResults.alunos.length > 0 && (
+                        <div className="space-y-1.5">
+                          <span className="text-[9px] font-black uppercase text-emerald-600 tracking-wider flex items-center gap-1 select-none">
+                            <Users className="w-3 h-3 text-emerald-600" /> Alunas Registradas
+                          </span>
+                          {matchedResults.alunos.slice(0, 3).map((item: any) => (
+                            <div 
+                              key={item.id}
+                              onClick={() => handleDropdownRowAction('aluno', item)}
+                              className="p-2 hover:bg-emerald-50/50 rounded-lg border border-transparent hover:border-emerald-100 transition duration-150 cursor-pointer flex justify-between items-center text-left"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-bold text-slate-800 truncate">{item.nome}</p>
+                                <p className="text-[10px] text-slate-500 truncate">{item.email || 'Sem e-mail'} • Turma: {item.turma || '-'}</p>
+                              </div>
+                              <span className="text-[8px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 select-none uppercase tracking-wider shrink-0 ml-2">Aluna</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* TURMAS */}
+                      {matchedResults?.turmas && matchedResults.turmas.length > 0 && (
+                        <div className="space-y-1.5">
+                          <span className="text-[9px] font-black uppercase text-indigo-600 tracking-wider flex items-center gap-1 select-none">
+                            <Layers className="w-3 h-3 text-indigo-600" /> Turmas / Calendário
+                          </span>
+                          {matchedResults.turmas.slice(0, 3).map((item: any) => (
+                            <div 
+                              key={item.id}
+                              onClick={() => handleDropdownRowAction('turma', item)}
+                              className="p-2 hover:bg-indigo-50/50 rounded-lg border border-transparent hover:border-indigo-100 transition duration-150 cursor-pointer flex justify-between items-center text-left"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-bold text-slate-800 truncate">{item.nome}</p>
+                                <p className="text-[10px] text-slate-500 truncate">{item.formacao || 'Formação Geral'}</p>
+                              </div>
+                              <span className="text-[8px] font-extrabold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 select-none uppercase tracking-wider shrink-0 ml-2">Turma</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* MATERIAIS */}
+                      {matchedResults?.materiais && matchedResults.materiais.length > 0 && (
+                        <div className="space-y-1.5">
+                          <span className="text-[9px] font-black uppercase text-teal-650 tracking-wider flex items-center gap-1 select-none">
+                            <BookOpen className="w-3 h-3 text-teal-600" /> Biblioteca & Materiais
+                          </span>
+                          {matchedResults.materiais.slice(0, 3).map((item: any) => (
+                            <div 
+                              key={item.id}
+                              onClick={() => handleDropdownRowAction('material', item)}
+                              className="p-2 hover:bg-teal-50/40 rounded-lg border border-transparent hover:border-teal-100 transition duration-150 cursor-pointer flex justify-between items-center text-left"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-bold text-slate-800 truncate">{item.nome ?? item.titulo}</p>
+                                <p className="text-[10px] text-slate-505 truncate">Categoria: {item.categoria ?? item.tipo ?? '-'}</p>
+                              </div>
+                              <span className="text-[8px] font-extrabold px-2 py-0.5 rounded-full bg-teal-100 text-teal-700 select-none uppercase tracking-wider shrink-0 ml-2">Material</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* FINANCEIRO */}
+                      {matchedResults?.pagamentos && matchedResults.pagamentos.length > 0 && (
+                        <div className="space-y-1.5">
+                          <span className="text-[9px] font-black uppercase text-amber-500 tracking-wider flex items-center gap-1 select-none">
+                            <DollarSign className="w-3 h-3 text-[#D4AF37]" /> Faturamento & Parcelas
+                          </span>
+                          {matchedResults.pagamentos.slice(0, 3).map((item: any) => (
+                            <div 
+                              key={item.id}
+                              onClick={() => handleDropdownRowAction('pagamento', item)}
+                              className="p-2 hover:bg-amber-50/40 rounded-lg border border-transparent hover:border-amber-100 transition duration-150 cursor-pointer flex justify-between items-center text-left"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-bold text-slate-800 truncate">{item.aluno}</p>
+                                <p className="text-[10px] text-slate-505 truncate">Mapeamento {item.formacao} - {item.status}</p>
+                              </div>
+                              <span className="text-[8px] font-extrabold px-2 py-0.5 rounded-full bg-amber-100 text-[#856404] select-none uppercase tracking-wider shrink-0 ml-2">Financeiro</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* SUPORTE / TAREFAS */}
+                      {((matchedResults?.suporte && matchedResults.suporte.length > 0) || (matchedResults?.tarefas && matchedResults.tarefas.length > 0)) && (
+                        <div className="space-y-1.5">
+                          <span className="text-[9px] font-black uppercase text-purple-600 tracking-wider flex items-center gap-1 select-none">
+                            <CheckSquare className="w-3 h-3 text-purple-600" /> Chamados & Demandas de Suporte
+                          </span>
+                          {matchedResults.suporte?.slice(0, 2).map((item: any) => (
+                            <div 
+                              key={item.id}
+                              onClick={() => handleDropdownRowAction('suporte', item)}
+                              className="p-2 hover:bg-purple-50/40 rounded-lg border border-transparent hover:border-purple-100 transition duration-150 cursor-pointer flex justify-between items-center text-left"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-bold text-slate-800 truncate">{item.titulo}</p>
+                                <p className="text-[10px] text-slate-505 truncate">Canal de Atendimento de Alunos</p>
+                              </div>
+                              <span className="text-[8px] font-extrabold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 select-none uppercase tracking-wider shrink-0 ml-2">Suporte</span>
+                            </div>
+                          ))}
+                          {matchedResults.tarefas?.slice(0, 2).map((item: any) => (
+                            <div 
+                              key={item.id}
+                              onClick={() => handleDropdownRowAction('tarefa', item)}
+                              className="p-2 hover:bg-purple-50/40 rounded-lg border border-transparent hover:border-purple-100 transition duration-150 cursor-pointer flex justify-between items-center text-left"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-bold text-slate-800 truncate">{item.titulo}</p>
+                                <p className="text-[10px] text-slate-505 truncate">Prazo: {item.prazo?.split('-').reverse().join('/') || 'Sem prazo'}</p>
+                              </div>
+                              <span className="text-[8px] font-extrabold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 select-none uppercase tracking-wider shrink-0 ml-2">Tarefa</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Footer links to full advanced search view */}
+                  <div className="p-2 bg-slate-50 rounded-lg text-center border-t border-slate-100 pt-2.5">
+                    <button 
+                      onClick={() => {
+                        setSearchOpen(true);
+                        setShowResultsDropdown(false);
+                      }}
+                      className="w-full text-center text-[#1D4E89] hover:text-[#0A192F] font-extrabold text-[10px] uppercase tracking-wider transition"
+                    >
+                      🚀 Abrir Painel de Busca Avançada (Filtro por Tags)
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Mobile search button indicator */}
-            <button 
-              onClick={() => setSearchOpen(true)}
-              className="sm:hidden p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-105 rounded-lg cursor-pointer"
-              title="Pesquisa global"
-            >
-              <Search className="w-4.5 h-4.5" />
-            </button>
+            {/* Float Backdrop to close search dropdown when clicking outside */}
+            {showResultsDropdown && headerSearch.trim().length >= 2 && (
+              <div 
+                className="fixed inset-0 z-30 cursor-default bg-slate-900/10 backdrop-blur-2xs" 
+                onClick={() => setShowResultsDropdown(false)} 
+              />
+            )}
           </div>
 
           <div className="flex items-center gap-3">
@@ -480,6 +975,102 @@ export function Layout({ children, activeTab, setActiveTab, onLogout, selectedPr
                 />
               )}
             </div>
+
+            {/* Profile Notifications Dropdown Trigger */}
+            {selectedProfile && (
+              <div className="relative">
+                <button 
+                  type="button"
+                  onClick={() => setProfileNotificationsOpen(!profileNotificationsOpen)}
+                  className="w-8 h-8 rounded-full bg-gradient-to-br from-[#D4AF37] to-indigo-950 border border-slate-200 text-white flex items-center justify-center font-black text-xs shadow-sm hover:ring-2 hover:ring-[#D4AF37]/45 hover:border-[#D4AF37] transition cursor-pointer overflow-hidden relative shrink-0 focus:outline-none"
+                  title="Minhas Pendências (Tarefas & Menções)"
+                >
+                  {getProfilePhoto(selectedProfile) ? (
+                    <img src={getProfilePhoto(selectedProfile)!} alt="Profile" className="w-full h-full object-cover" />
+                  ) : (
+                    getProfileName(selectedProfile).charAt(0)
+                  )}
+                  {myPendingNotificationsCount > 0 && (
+                    <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-rose-500 rounded-full border border-white animate-pulse" />
+                  )}
+                </button>
+                {profileNotificationsOpen && (
+                  <div className="absolute right-0 top-12 w-[300px] bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden text-left flex flex-col max-h-[420px] animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="p-3 bg-[#0A192F] text-white flex items-center justify-between select-none">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#D4AF37] to-indigo-900 text-white flex items-center justify-center font-black text-[9px] overflow-hidden shrink-0">
+                          {getProfilePhoto(selectedProfile) ? (
+                            <img src={getProfilePhoto(selectedProfile)!} alt="Profile" className="w-full h-full object-cover" />
+                          ) : (
+                            getProfileName(selectedProfile).charAt(0)
+                          )}
+                        </div>
+                        <span className="text-xs font-black text-slate-100">
+                          Pendências de {getProfileName(selectedProfile)}
+                        </span>
+                      </div>
+                      <button 
+                        type="button"
+                        onClick={() => setProfileNotificationsOpen(false)}
+                        className="p-1 rounded text-slate-450 hover:text-white hover:bg-slate-850 transition"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    
+                    <div className="flex-1 overflow-y-auto p-3 space-y-2.5 max-h-[300px] bg-stone-50">
+                      {myPendingNotifications.length === 0 ? (
+                        <div className="p-6 text-center h-44 flex flex-col items-center justify-center space-y-1.5 select-none font-sans">
+                          <span className="text-2xl">🎉</span>
+                          <p className="text-xs font-extrabold text-slate-700">Tudo em dia!</p>
+                          <p className="text-[10px] text-slate-500 max-w-[200px]">Como colaborador do Instituto Liana Gomes, você não possui pendências ou menções pendentes.</p>
+                        </div>
+                      ) : (
+                        myPendingNotifications.map(n => (
+                          <button
+                            key={n.id}
+                            type="button"
+                            onClick={() => {
+                              setProfileNotificationsOpen(false);
+                              if (n.type === 'task') {
+                                setActiveTab('prioridades_hoje');
+                              } else {
+                                setActiveTab('comunicacao_interna');
+                                if (n.channelId) {
+                                  setTimeout(() => {
+                                    window.dispatchEvent(new CustomEvent('set_comunicacao_canal', { detail: n.channelId }));
+                                  }, 150);
+                                }
+                              }
+                            }}
+                            className="w-full text-left p-2.5 bg-white hover:bg-[#D4AF37]/5 border border-slate-200 rounded-xl hover:border-[#D4AF37]/35 transition flex gap-2.5 items-start shadow-3xs group cursor-pointer"
+                          >
+                            <div className={cn(
+                              "p-1.5 rounded-lg shrink-0 mt-0.5",
+                              n.type === 'task' ? "bg-amber-50 text-amber-600 border border-amber-100" : "bg-blue-50 text-blue-600 border border-blue-100"
+                            )}>
+                              {n.type === 'task' ? <CheckSquare className="w-3.5 h-3.5" /> : <MessageSquare className="w-3.5 h-3.5" />}
+                            </div>
+                            <div className="flex-1 min-w-0 text-left">
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="text-[9px] font-extrabold text-[#1F4E89] bg-slate-100 px-1.5 py-0.2 rounded font-mono uppercase pr-1 block truncate max-w-[130px]">{n.origin}</span>
+                                <span className="text-[9px] text-slate-400 font-mono scale-90 shrink-0">{n.date.split(' ')[0]}</span>
+                              </div>
+                              <p className="text-xs font-black text-slate-800 leading-snug mt-1 truncate group-hover:text-[#1F4E89] transition">{n.title}</p>
+                              <p className="text-[10px] text-slate-500 leading-normal mt-0.5 truncate">{n.description}</p>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                    
+                    <div className="p-2 bg-stone-100 text-center text-[9px] text-slate-500 font-bold border-t border-slate-200 select-none">
+                      Total de {myPendingNotifications.length} pendências ativas
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {isLocalFallbackMode ? (
               <span className="text-[10px] bg-amber-500/10 border border-amber-500/20 text-amber-600 px-2.5 py-1 rounded-full font-bold flex items-center gap-1 shadow-sm select-none" title="Conexão com Firestore indisponível. O portal está operando em modo offline Sandbox com dados 100% seguros!">

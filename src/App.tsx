@@ -41,6 +41,7 @@ const AgenteSocialSellerModule = React.lazy(() => import('./components/AgenteSoc
 const TagManagerModule = React.lazy(() => import('./components/TagManager/TagManagerModule').then(m => ({ default: m.TagManagerModule })));
 const MeuPerfilModule = React.lazy(() => import('./components/MeuPerfil/MeuPerfilModule').then(m => ({ default: m.MeuPerfilModule })));
 const RelatorioPerformanceModule = React.lazy(() => import('./components/RelatorioPerformance/RelatorioPerformanceModule').then(m => ({ default: m.RelatorioPerformanceModule })));
+const RelatorioEngajamentoModule = React.lazy(() => import('./components/RelatorioEngajamento/RelatorioEngajamentoModule').then(m => ({ default: m.RelatorioEngajamentoModule })));
 
 const PortalExterno = React.lazy(() => import('./components/ComunicacaoInterna/PortalExterno').then(m => ({ default: m.PortalExterno })));
 
@@ -284,6 +285,7 @@ export default function App() {
             {activeTab === 'meu_painel' && <MeuPainel setActiveTab={setActiveTab} />}
             {activeTab === 'meu_perfil' && selectedProfile && <MeuPerfilModule userId={selectedProfile} />}
             {activeTab === 'relatorio_performance' && selectedProfile === 'liana' && <RelatorioPerformanceModule />}
+            {activeTab === 'relatorio_engajamento' && <RelatorioEngajamentoModule />}
             {activeTab === 'espacos' && <EspacosModule />}
             {activeTab === 'pessoas' && <PessoasModule />}
             {activeTab === 'whatsapp' && <WhatsappModule />}

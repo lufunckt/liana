@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Plus, Trash2, Check, Palette } from 'lucide-react';
 import { useStore } from '../store';
+import { logAuditEvent } from '../lib/audit';
 
 interface TagManagerModalProps {
   onClose: () => void;
@@ -44,6 +45,11 @@ export function TagManagerModal({ onClose }: TagManagerModalProps) {
     const newTag = { id: tagId, nome: cleanNome, cor };
     
     await addSingleDocument('tags_personalizaveis', newTag);
+    try {
+      await logAuditEvent('cadastro_tag', tagId, { nome: cleanNome, cor });
+    } catch (e) {
+      console.error('Erro ao registrar log de auditoria ao cadastrar tag', e);
+    }
     setNome('');
   };
 
@@ -59,12 +65,22 @@ export function TagManagerModal({ onClose }: TagManagerModalProps) {
       nome: editingNome.trim(),
       cor: editingCor
     });
+    try {
+      await logAuditEvent('edicao_tag', id, { nome: editingNome.trim(), cor: editingCor });
+    } catch (e) {
+      console.error('Erro ao registrar log de auditoria ao editar tag', e);
+    }
     setEditingId(null);
   };
 
   const handleDeleteTag = async (id: string, name: string) => {
     if (confirm(`Deseja realmente excluir a tag "${name}"? Ela deixará de estar ativa nos registros de Leads, Alunos e Materiais.`)) {
       await deleteSingleDocument('tags_personalizaveis', id);
+      try {
+        await logAuditEvent('exclusao_tag', id, { nome: name });
+      } catch (e) {
+        console.error('Erro ao registrar log de auditoria ao excluir tag', e);
+      }
     }
   };
 

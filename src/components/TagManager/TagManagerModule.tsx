@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useStore } from '../../store';
 import { Tag } from '../../types';
 import { Plus, Trash2, Tag as TagIcon } from 'lucide-react';
+import { logAuditEvent } from '../../lib/audit';
 
 export function TagManagerModule() {
   const { data, addSingleDocument, deleteSingleDocument } = useStore();
@@ -11,11 +12,29 @@ export function TagManagerModule() {
 
   const handleAddTag = async () => {
     if (!newTagName) return;
+    const tagId = `tag-${Math.random().toString(36).substring(2, 9)}`;
     await addSingleDocument('tags_personalizaveis', {
+      id: tagId,
       name: newTagName,
       color: newTagColor
     });
+    try {
+      await logAuditEvent('cadastro_tag', tagId, { nome: newTagName, cor: newTagColor, via: 'Módulo de Configuração de Tags' });
+    } catch (e) {
+      console.error('Erro ao registrar log de auditoria de tag no modulo', e);
+    }
     setNewTagName('');
+  };
+
+  const handleDeleteTag = async (id: string, name: string) => {
+    if (confirm(`Deseja realmente excluir a tag "${name}"? Ela deixará de estar ativa nos registros de Leads, Alunos e Materiais.`)) {
+      await deleteSingleDocument('tags_personalizaveis', id);
+      try {
+        await logAuditEvent('exclusao_tag', id, { nome: name, via: 'Módulo de Configuração de Tags' });
+      } catch (e) {
+        console.error('Erro ao registrar log de auditoria ao excluir tag no modulo', e);
+      }
+    }
   };
 
   return (
@@ -44,7 +63,7 @@ export function TagManagerModule() {
           <div key={tag.id} className="px-3 py-1 rounded-full text-sm flex items-center gap-2 border" style={{ backgroundColor: `${tag.color}20`, borderColor: tag.color, color: tag.color }}>
             <TagIcon size={14} />
             {tag.name}
-            <button onClick={() => deleteSingleDocument('tags_personalizaveis', tag.id)} className="text-slate-500 hover:text-red-500">
+            <button onClick={() => handleDeleteTag(tag.id, tag.name)} className="text-slate-500 hover:text-red-500">
               <Trash2 size={14} />
             </button>
           </div>
