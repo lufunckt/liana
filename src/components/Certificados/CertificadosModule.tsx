@@ -393,7 +393,7 @@ Ana Paula Martins,ana.paula@gmail.com,Workshop Compliance,Turma A,8 horas,15/05/
       dataGeracao: new Date().toLocaleDateString('pt-BR'),
       status: 'gerado',
       linkPdf: '#', // download mock
-      responsavel: auth.currentUser?.email?.split('@')[0] || 'Liana Gomes'
+      responsavel: auth.currentUser?.email?.split('@')[0] || (typeof localStorage !== 'undefined' ? localStorage.getItem('ilg_authenticated_email')?.split('@')[0] : null) || 'Liana Gomes'
     };
 
     if (!isBulk) {
@@ -584,7 +584,7 @@ Ana Paula Martins,ana.paula@gmail.com,Workshop Compliance,Turma A,8 horas,15/05/
     setBatchProgress(0);
     setBatchStatusLog([]);
 
-    const userEmail = auth.currentUser?.email?.split('@')[0] || 'Liana Gomes';
+    const userEmail = auth.currentUser?.email?.split('@')[0] || (typeof localStorage !== 'undefined' ? localStorage.getItem('ilg_authenticated_email')?.split('@')[0] : null) || 'Liana Gomes';
     const newCertificates: IssuedCertificate[] = [];
 
     for (let i = 0; i < batchRecords.length; i++) {

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { motion, AnimatePresence } from 'motion/react';
+import { logAuditEvent } from '../../lib/audit';
 
 // Definitions
 interface MessageReply {
@@ -658,6 +659,12 @@ export function ComunicacaoInternaModule() {
           await deleteSingleDocument('ilgc_notificacoes', note.id);
         }
 
+        try {
+          await logAuditEvent('ativacao_canal_real_comunicacoes', 'sistema', { action: 'wipe_demo_data', status: 'real_activated' });
+        } catch (e) {
+          console.error(e);
+        }
+
         alert('Sucesso! O banco de dados do Firestore foi limpo e formatado em Modo do Canal Corporativo de Produção Real. Agora você já pode escrever e anexar documentos reais!');
         window.location.reload();
       } catch (err) {
@@ -670,6 +677,9 @@ export function ComunicacaoInternaModule() {
   const handleRestoreDemoContent = () => {
     if (window.confirm('Deseja reativar as conversas operacionais de demonstração para fins de teste ou auditoria?')) {
       localStorage.removeItem('ilg_comunicacao_real');
+      try {
+        logAuditEvent('reativacao_dados_demonstracao', 'sistema', { action: 'restore_demo_data', status: 'demo_activated' }).catch(console.error);
+      } catch (e) {}
       alert('Modo de demonstração reativado! O sistema recarregará as mensagens padrão.');
       window.location.reload();
     }
@@ -875,6 +885,33 @@ export function ComunicacaoInternaModule() {
               </button>
             );
           })}
+        </div>
+
+        {/* Global/Sidebar Demo vs Real Mode Indicator */}
+        <div className="p-3.5 border-t border-[#10243e] bg-[#071324]/90">
+          {localStorage.getItem('ilg_comunicacao_real') === 'true' ? (
+            <div className="flex items-center gap-2 text-[10px] text-emerald-400 font-extrabold font-sans tracking-wider">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              MODO REAL ATIVO (PRODUÇÃO)
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="text-[10px] text-amber-405 font-extrabold flex items-center gap-2 tracking-wider text-amber-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-bounce"></span>
+                AMBIENTE DE DEMONSTRÁVEL
+              </div>
+              <p className="text-[9.5px] text-slate-400 leading-normal font-sans">
+                Inicializado com conversas cooperativas para facilitar testes da equipe de SDR, CS e Gestão.
+              </p>
+              <button
+                type="button"
+                onClick={handleWipeDemoContent}
+                className="w-full py-1.5 px-2 bg-gradient-to-r from-amber-500 to-[#D4AF37] hover:from-amber-600 hover:to-[#C39F2D] text-slate-950 font-black text-[9px] uppercase rounded tracking-wider transition cursor-pointer text-center block select-none border-none shadow-md"
+              >
+                Limpar Demo e Ativar Canal Real
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

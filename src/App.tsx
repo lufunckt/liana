@@ -50,6 +50,14 @@ export default function App() {
 
   const isEmailAllowed = (email: string) => {
     const userEmail = email.toLowerCase().trim();
+
+    // Check if the current user has already logged in or successfully registered via custom credentials
+    const activeEmail = localStorage.getItem('ilg_authenticated_email')?.toLowerCase().trim();
+    const sessionActive = localStorage.getItem('ilg_session_active');
+    if (sessionActive === 'true' && activeEmail === userEmail) {
+      return true;
+    }
+
     const baseEmails = [
       'ericocavalheiro.psico@gmail.com', // Admin / Desenvolvedor
       'liana@institutolianagomes.com.br',
@@ -70,7 +78,10 @@ export default function App() {
   );
 
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return false; // Force real authentication
+    // Persistent authenticated state
+    const active = localStorage.getItem('ilg_session_active');
+    const email = localStorage.getItem('ilg_authenticated_email');
+    return active === 'true' && !!email;
   });
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'meu_painel' | 'meu_perfil' | 'relatorio_performance' | 'pessoas' | 'comercial' | 'alunos' | 'tarefas_suporte' | 'materials' | 'importar' | 'espacos' | 'financeiro' | 'whatsapp' | 'planilhas' | 'certificados' | 'salas_reuniao' | 'workspace_criativo' | 'comunicacao_interna' | 'agente_social_seller' | 'prioridades_hoje' | 'busca_global' | any>('meu_painel');
@@ -87,11 +98,40 @@ export default function App() {
     }
 
     const checkLocalAuth = async () => {
-      console.log("[CHECK_AUTH] [STAGE 1/6] Starting checkLocalAuth hook check...");
-      
-      // Removed auto-login from local storage to enforce password requirement every start
-      console.log("[CHECK_AUTH] [STAGE 2/6] Auto-login from local storage disabled to ensure security.");
-      
+      console.log("[CHECK_AUTH] Checking session active...");
+      const savedEmail = localStorage.getItem('ilg_authenticated_email');
+      const sessionActive = localStorage.getItem('ilg_session_active');
+
+      if (sessionActive === 'true' && savedEmail) {
+        const userEmail = savedEmail.toLowerCase().trim();
+        const isAllowed = isEmailAllowed(userEmail);
+        if (isAllowed) {
+          setIsAuthenticated(true);
+          try {
+            setLoading(true);
+            const perfisRef = collection(db, 'perfis');
+            const q = query(perfisRef, where('email', '==', userEmail));
+            const querySnapshot = await getDocs(q);
+            if (!querySnapshot.empty) {
+              const profileId = querySnapshot.docs[0].id;
+              setSelectedProfile(profileId);
+              localStorage.setItem('ilg_selected_profile', profileId);
+            } else {
+              const baseId = userEmail.split('@')[0];
+              setSelectedProfile(baseId);
+              localStorage.setItem('ilg_selected_profile', baseId);
+            }
+          } catch (error) {
+            console.error("Erro ao recuperar perfil:", error);
+            const baseId = userEmail.split('@')[0];
+            setSelectedProfile(baseId);
+            localStorage.setItem('ilg_selected_profile', baseId);
+          } finally {
+            setLoading(false);
+          }
+          return;
+        }
+      }
       setIsAuthenticated(false);
       setLoading(false);
     };
@@ -204,6 +244,7 @@ export default function App() {
     localStorage.removeItem('ilg_selected_profile');
     localStorage.removeItem('ilg_store_fallback_data');
     localStorage.removeItem('ilg_authenticated_email');
+    localStorage.removeItem('ilg_session_active');
     setSelectedProfile(null);
     setIsAuthenticated(false);
   };

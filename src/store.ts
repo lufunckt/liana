@@ -113,7 +113,8 @@ const loadInitialCachedState = (): AppData => {
     ilgc_canais: [],
     ilgc_mensagens: [],
     ilgc_notificacoes: [],
-    allowed_emails: []
+    allowed_emails: [],
+    historico: []
   };
 
   try {
@@ -145,7 +146,8 @@ const collections = [
   'ilgc_canais',
   'ilgc_mensagens',
   'ilgc_notificacoes',
-  'allowed_emails'
+  'allowed_emails',
+  'historico'
 ] as const;
 
 let memData: AppData = loadInitialCachedState();

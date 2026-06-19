@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Mail, Lock, ShieldAlert } from 'lucide-react';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../lib/firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 interface LoginProps {
   onLogin: (email: string) => void;
@@ -19,17 +19,60 @@ export function Login({ onLogin }: LoginProps) {
     setLoading(true);
     setErrorMsg('');
 
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail || !password) {
+      setErrorMsg('Por favor, preencha todos os campos.');
+      setLoading(false);
+      return;
+    }
+
     try {
+      const userRef = doc(db, 'usuarios_credenciais', normalizedEmail);
+
       if (mode === 'login') {
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        onLogin(userCredential.user.email || email);
+        const userSnap = await getDoc(userRef);
+        if (!userSnap.exists()) {
+          setErrorMsg('Este e-mail não está cadastrado. Se for seu primeiro acesso, clique em "Criar uma aqui" abaixo.');
+          setLoading(false);
+          return;
+        }
+
+        const userData = userSnap.data();
+        if (userData.password !== password) {
+          setErrorMsg('E-mail ou senha incorretos.');
+          setLoading(false);
+          return;
+        }
+
+        // Successfully authenticated!
+        localStorage.setItem('ilg_session_active', 'true');
+        localStorage.setItem('ilg_authenticated_email', normalizedEmail);
+        onLogin(normalizedEmail);
       } else {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        onLogin(userCredential.user.email || email);
+        // Mode: Register
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          setErrorMsg('Este e-mail já possui uma conta cadastrada. Faça o login.');
+          setLoading(false);
+          return;
+        }
+
+        // Save credential
+        await setDoc(userRef, {
+          email: normalizedEmail,
+          password: password,
+          createdAt: new Date().toISOString()
+        });
+
+        // Set session active and trigger login
+        localStorage.setItem('ilg_session_active', 'true');
+        localStorage.setItem('ilg_authenticated_email', normalizedEmail);
+        onLogin(normalizedEmail);
       }
     } catch (error: any) {
       console.error(error);
-      setErrorMsg(mode === 'login' ? 'E-mail ou senha incorretos.' : 'Erro ao criar conta: ' + error.message);
+      setErrorMsg('Erro na conexão com o banco de dados. Tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -79,9 +122,35 @@ export function Login({ onLogin }: LoginProps) {
           </div>
 
           {errorMsg && (
-            <div className="bg-red-50 text-red-650 p-3 rounded-xl border border-red-100 flex items-start gap-2.5 text-xs font-semibold leading-relaxed animate-pulse">
-              <ShieldAlert className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-              <span>{errorMsg}</span>
+            <div className="bg-red-50 text-red-900 p-3 rounded-xl border border-red-100 flex flex-col gap-2 text-xs font-semibold leading-relaxed">
+              <div className="flex items-start gap-2.5">
+                <ShieldAlert className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                <span>{errorMsg}</span>
+              </div>
+              {errorMsg.includes('já possui uma conta') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('login');
+                    setErrorMsg('');
+                  }}
+                  className="mt-1 self-start bg-[#0A192F] hover:bg-slate-800 text-white font-extrabold text-[10px] px-3 py-1.5 rounded-lg transition-colors uppercase tracking-wider"
+                >
+                  Preencher dados e Fazer Login
+                </button>
+              )}
+              {errorMsg.includes('não está cadastrado') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('register');
+                    setErrorMsg('');
+                  }}
+                  className="mt-1 self-start bg-[#0A192F] hover:bg-slate-800 text-white font-extrabold text-[10px] px-3 py-1.5 rounded-lg transition-colors uppercase tracking-wider"
+                >
+                  Ir para Criar Conta agora
+                </button>
+              )}
             </div>
           )}
 

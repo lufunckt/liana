@@ -55,8 +55,8 @@ export const logAuditEvent = async (action: string, pessoaId: string, details: a
       action,
       pessoaId,
       details,
-      userId: auth.currentUser?.uid || 'anonymous',
-      userEmail: auth.currentUser?.email || 'anonymous',
+      userId: auth.currentUser?.uid || (typeof localStorage !== 'undefined' ? localStorage.getItem('ilg_selected_profile') : null) || 'anonymous',
+      userEmail: auth.currentUser?.email || (typeof localStorage !== 'undefined' ? localStorage.getItem('ilg_authenticated_email') : null) || 'anonymous',
       timestamp: new Date().toISOString()
     });
   } catch (error) {

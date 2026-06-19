@@ -11,6 +11,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { cn, getTodayString, normalizeStatusSlug, normalizeOnboardingSlug } from '../lib/utils';
 import { PessoaFicha } from './Pessoas/PessoaFicha';
 import { MeuPerfilModal } from './MeuPerfilModal';
+import { ColecaoLogsAuditoria } from './ColecaoLogsAuditoria';
 
 interface MeuPainelProps {
   setActiveTab: (tab: any) => void;
@@ -31,6 +32,7 @@ export function MeuPainel({ setActiveTab }: MeuPainelProps) {
   const tarefas = data.tarefas_suporte || [];
   const pagamentos = data.pagamentos || [];
   const materiais = data.materiais || [];
+  const historico = data.historico || [];
 
   const todayStr = getTodayString(); // Dynamic system date using central function
 
@@ -574,6 +576,9 @@ export function MeuPainel({ setActiveTab }: MeuPainelProps) {
           </div>
         </div>
 
+        {/* Administrative Audit logs for Executive Oversight */}
+        <ColecaoLogsAuditoria historico={historico} perfis={perfis} />
+
         {/* Dashboard Liana Actions */}
         <div className="bg-[#0A192F] text-white p-5 rounded-xl border border-slate-800 grid grid-cols-2 md:grid-cols-4 gap-3 text-left">
           <button onClick={() => setActiveTab('financeiro')} className="p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-left transition space-y-1">
@@ -613,17 +618,18 @@ export function MeuPainel({ setActiveTab }: MeuPainelProps) {
     
     // Duplicate calculation by WhatsApp string helper
     const phoneSeen = new Set<string>();
-    const dupesList: string[] = [];
+    const dupesSet = new Set<string>();
     pessoas.forEach(p => {
       const ph = String(p.telefone || '').replace(/\D/g, '');
       if (ph && ph.length > 5) {
         if (phoneSeen.has(ph)) {
-          dupesList.push(ph);
+          dupesSet.add(ph);
         } else {
           phoneSeen.add(ph);
         }
       }
     });
+    const dupesList = Array.from(dupesSet);
 
     const tasksByPerson: { [key: string]: number } = {};
     tarefas.forEach(t => {
@@ -729,6 +735,9 @@ export function MeuPainel({ setActiveTab }: MeuPainelProps) {
             </div>
           </div>
         </div>
+
+        {/* Administrative Audit logs for Tech Lead and Systems Verification */}
+        <ColecaoLogsAuditoria historico={historico} perfis={perfis} />
 
         {/* Action Grid */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 grid grid-cols-2 md:grid-cols-4 gap-3 text-left">

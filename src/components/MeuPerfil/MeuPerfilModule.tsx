@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useStore } from '../../store';
 import { Camera, UploadCloud, UserCircle, Save, Bell, Check, Download, Trash2, Plus, Shield, Mail } from 'lucide-react';
-import { ref, uploadString, getDownloadURL } from 'firebase/storage';
+import { ref, uploadString, getDownloadURL, uploadBytes } from 'firebase/storage';
 import { storage } from '../../lib/firebase';
 import { showToast } from '../../lib/utils';
 
@@ -80,6 +80,18 @@ export function MeuPerfilModule({ userId }: { userId: string }) {
   };
 
   useEffect(() => {
+    if (activeProfile.nome) setFormName(prev => prev || activeProfile.nome || '');
+    if (activeProfile.cargo) setFormCargo(prev => prev || activeProfile.cargo || '');
+    if (activeProfile.foto) setFormFoto(prev => prev === '' ? (activeProfile.foto || '') : prev);
+    if (activeProfile.notificacoes) setNotif(activeProfile.notificacoes);
+  }, [
+    activeProfile.nome,
+    activeProfile.cargo,
+    activeProfile.foto,
+    activeProfile.notificacoes
+  ]);
+
+  useEffect(() => {
     if (showCamera) {
       navigator.mediaDevices.getUserMedia({ video: true })
         .then(stream => {
@@ -109,10 +121,41 @@ export function MeuPerfilModule({ userId }: { userId: string }) {
       await uploadString(storageRef, dataUrl, 'data_url');
       const downloadURL = await getDownloadURL(storageRef);
       setFormFoto(downloadURL);
+      
+      // Persist photo directly to Firebase
+      await updateSingleField('perfis', userId, {
+        foto: downloadURL
+      });
+      
       showToast('Foto atualizada com sucesso!', 'success');
     } catch (e) {
       console.error(e);
       showToast('Erro ao enviar foto.', 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const storageRef = ref(storage, `avatars/${userId}/${Date.now()}_${file.name}`);
+      const snapshot = await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      setFormFoto(downloadURL);
+      
+      // Persist photo directly to Firebase
+      await updateSingleField('perfis', userId, {
+        foto: downloadURL
+      });
+
+      showToast('Foto enviada com sucesso!', 'success');
+    } catch (e) {
+      console.error(e);
+      showToast('Erro ao enviar foto do computador.', 'error');
     } finally {
       setUploading(false);
     }
@@ -174,12 +217,30 @@ export function MeuPerfilModule({ userId }: { userId: string }) {
       <div className="bg-white rounded-2xl shadow-sm border border-slate-150 p-6 space-y-6">
         {/* Avatar section */}
         <div className="flex items-center gap-6">
-          <div className="w-24 h-24 rounded-full bg-slate-100 overflow-hidden shadow-inner flex items-center justify-center relative">
-            {formFoto ? <img src={formFoto} className="w-full h-full object-cover" /> : <UserCircle className="w-12 h-12 text-slate-300" />}
+          <div className="w-24 h-24 rounded-full bg-slate-100 overflow-hidden shadow-inner flex items-center justify-center relative justify-center bg-slate-105">
+            {formFoto ? <img src={formFoto} className="w-full h-full object-cover" /> : <UserCircle className="w-12 h-12 text-slate-400" />}
           </div>
-          <div className="flex gap-3">
-             <button onClick={() => setShowCamera(true)} className="flex items-center gap-2 px-4 py-2 border rounded-lg text-sm font-bold"><Camera className="w-4 h-4"/>Tirar Foto</button>
-             {/* Add file uploader here too for completeness */}
+          <div className="flex flex-col sm:flex-row gap-3">
+             <button 
+               type="button"
+               onClick={() => setShowCamera(true)} 
+               className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+             >
+               <Camera className="w-4 h-4 text-slate-500" />
+               Tirar Foto (Câmera)
+             </button>
+             
+             <label className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer select-none">
+               <UploadCloud className="w-4 h-4 text-[#1D4E89]" />
+               <span>{uploading ? 'Enviando...' : 'Fazer Upload do Computador'}</span>
+               <input 
+                 type="file" 
+                 accept="image/*" 
+                 className="hidden" 
+                 onChange={handleFileChange} 
+                 disabled={uploading} 
+               />
+             </label>
           </div>
         </div>
 

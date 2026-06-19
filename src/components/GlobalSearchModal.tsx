@@ -22,6 +22,7 @@ export function GlobalSearchModal({ onClose, setActiveTab }: GlobalSearchModalPr
   const materiais = data.materiais || [];
   const pagamentos = data.pagamentos || [];
   const tarefasSuporte = data.tarefas_suporte || [];
+  const tagsList = data.tags_personalizaveis || [];
 
   // Matcher function safely
   const match = (val: any, q: string) => {
@@ -279,8 +280,28 @@ export function GlobalSearchModal({ onClose, setActiveTab }: GlobalSearchModalPr
                             </div>
                             <div className="text-[10px] text-slate-500 truncate mt-0.5">{item.email} • {item.telefone || 'Sem fone'}</div>
                             <div className="text-[9px] text-slate-400 mt-1 font-semibold">Interesse: <strong className="text-slate-600">{item.produtoInteresse || 'Sem produto'}</strong> • SDR: <strong className="text-slate-600">{item.responsavel || 'Mara'}</strong></div>
+                            
+                            {/* Render active customizable tags under the lead */}
+                            {item.tags && Array.isArray(item.tags) && item.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1.5 animate-in fade-in">
+                                {item.tags.map((t: string) => {
+                                  const found = tagsList.find((g: any) => (g.nome || g.name || '').toLowerCase() === t.toLowerCase() || g.id === t);
+                                  const tagCor = found ? (found.cor || found.color) : '#64748B';
+                                  const tagNome = found ? (found.nome || found.name) : t;
+                                  return (
+                                    <span 
+                                      key={t}
+                                      style={{ backgroundColor: `${tagCor}16`, color: tagCor, borderColor: `${tagCor}30` }}
+                                      className="px-2 py-0.5 text-[8px] font-extrabold uppercase border rounded tracking-wider shadow-3xs"
+                                    >
+                                      {tagNome}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
-                          <Eye className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <Eye className="w-3.5 h-3.5 text-slate-400 shrink-0 self-start mt-1" />
                         </div>
                       )
                     })}
@@ -305,12 +326,32 @@ export function GlobalSearchModal({ onClose, setActiveTab }: GlobalSearchModalPr
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-bold text-xs text-slate-900 truncate">{item.nome}</span>
-                              <span className="text-[9px] font-extrabold bg-emerald-105 text-emerald-850 uppercase px-2 rounded-full tracking-wider">{item.turma || 'Turma Ativa'}</span>
+                              <span className="text-[9px] font-extrabold bg-emerald-105 text-emerald-850 uppercase px-3 rounded-full tracking-wider">{item.turma || 'Turma Ativa'}</span>
                             </div>
                             <div className="text-[10px] text-slate-500 truncate mt-0.5">{item.email} • {item.telefone || 'Sem fone'}</div>
                             <div className="text-[9px] text-slate-400 mt-1 font-semibold">Formação: <strong className="text-slate-600">{item.produtoComprado || item.formacao || 'Combo'}</strong> • Acesso: <strong className="text-slate-600 font-mono uppercase">{item.statusAcesso || 'Ativo'}</strong></div>
+                            
+                            {/* Render active customizable tags under the student */}
+                            {item.tags && Array.isArray(item.tags) && item.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1.5 animate-in fade-in">
+                                {item.tags.map((t: string) => {
+                                  const found = tagsList.find((g: any) => (g.nome || g.name || '').toLowerCase() === t.toLowerCase() || g.id === t);
+                                  const tagCor = found ? (found.cor || found.color) : '#64748B';
+                                  const tagNome = found ? (found.nome || found.name) : t;
+                                  return (
+                                    <span 
+                                      key={t}
+                                      style={{ backgroundColor: `${tagCor}16`, color: tagCor, borderColor: `${tagCor}30` }}
+                                      className="px-2 py-0.5 text-[8px] font-extrabold uppercase border rounded tracking-wider shadow-3xs"
+                                    >
+                                      {tagNome}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
-                          <Eye className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <Eye className="w-3.5 h-3.5 text-slate-400 shrink-0 self-start mt-1" />
                         </div>
                       )
                     })}

@@ -21,10 +21,16 @@ import {
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { logAuditEvent } from '../../lib/audit';
 
 export function FinanceiroModule() {
   const { data, updateModuleData } = useStore();
   const pagamentos = data.pagamentos || [];
+
+  // Value formatting helper hoisted to top
+  const formatCurrency = (val: number) => {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+  };
 
   // Handler to generate and download a beautifully crafted PDF summary report for the current month
   const handleGeneratePDF = () => {
@@ -259,6 +265,189 @@ export function FinanceiroModule() {
     doc.save(filename);
   };
 
+  const handleExportFilteredPDF = () => {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const now = new Date();
+    
+    // Header background
+    doc.setFillColor(10, 25, 47); // Dark Navy #0A192F
+    doc.rect(0, 0, 210, 38, 'F');
+
+    // Branding (Instituto Liana Gomes Style)
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(15);
+    doc.text('INSTITUTO LIANA GOMES', 15, 14);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(212, 175, 55); // Gold #D4AF37
+    doc.text('Relatório Personalizado de Lançamentos Financeiros (Filtros Ativos)', 15, 20);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(170, 180, 190);
+    doc.text(`Emitido em: ${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`, 15, 27);
+
+    // Active filters label box
+    doc.setFillColor(255, 255, 255, 0.15); // Transparent white overlay
+    doc.roundedRect(132, 8, 63, 22, 1.5, 1.5, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.text('FILTROS DA TELA ATIVA', 135, 13);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.text(`Busca: ${search ? `"${search}"` : 'Tudo'}`, 135, 17.5);
+    doc.text(`Status: ${statusFilter ? statusFilter.toUpperCase() : 'Todos'}`, 135, 21.5);
+    doc.text(`Curso: ${formacaoFilter ? formacaoFilter : 'Todos'}`, 135, 25.5);
+
+    // Summary calculation for CURRENT FILTERED LIST OF PAYMENTS
+    let totalPagoFiltrado = 0;
+    let totalPendenteFiltrado = 0;
+    let totalAtrasadoFiltrado = 0;
+
+    filteredPagamentos.forEach((p: any) => {
+      const val = parseFloat(p.valorCombinado) || 0;
+      if (p.status === 'pago') {
+        totalPagoFiltrado += val;
+      } else if (p.status === 'atrasado') {
+        totalAtrasadoFiltrado += val;
+      } else {
+        totalPendenteFiltrado += val;
+      }
+    });
+
+    // Metrics Box section on PDF (Y = 45)
+    const cardY = 45;
+    const boxW = 58;
+    const boxG = 4.5;
+    const leftMargin = 15;
+
+    // Card 1: Pago
+    doc.setFillColor(243, 249, 245);
+    doc.setDrawColor(210, 230, 215);
+    doc.roundedRect(leftMargin, cardY, boxW, 16, 1.5, 1.5, 'FD');
+    doc.setTextColor(30, 95, 60);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.text('TOTAL PAGO (FILTRADO)', leftMargin + 3.5, cardY + 5);
+    doc.setFontSize(9);
+    doc.text(formatCurrency(totalPagoFiltrado), leftMargin + 3.5, cardY + 11.5);
+
+    // Card 2: Pendente
+    const xCard2 = leftMargin + boxW + boxG;
+    doc.setFillColor(254, 249, 237);
+    doc.setDrawColor(253, 235, 190);
+    doc.roundedRect(xCard2, cardY, boxW, 16, 1.5, 1.5, 'FD');
+    doc.setTextColor(160, 95, 10);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.text('A VENCER / PARCIAL', xCard2 + 3.5, cardY + 5);
+    doc.setFontSize(9);
+    doc.text(formatCurrency(totalPendenteFiltrado), xCard2 + 3.5, cardY + 11.5);
+
+    // Card 3: Atrasado
+    const xCard3 = xCard2 + boxW + boxG;
+    doc.setFillColor(254, 242, 242);
+    doc.setDrawColor(254, 215, 215);
+    doc.roundedRect(xCard3, cardY, boxW, 16, 1.5, 1.5, 'FD');
+    doc.setTextColor(175, 25, 25);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.text('ATRASADO (FILTRADO)', xCard3 + 3.5, cardY + 5);
+    doc.setFontSize(9);
+    doc.text(formatCurrency(totalAtrasadoFiltrado), xCard3 + 3.5, cardY + 11.5);
+
+    doc.setDrawColor(225, 230, 235);
+    doc.line(15, 67, 195, 67);
+
+    // Table view
+    doc.setTextColor(10, 25, 47);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.text(`LANÇAMENTOS EXIBIDOS NA TELA (${filteredPagamentos.length} registros)`, 15, 73);
+
+    const tableRows = filteredPagamentos.map((p: any) => {
+      const formattedVal = formatCurrency(parseFloat(p.valorCombinado) || 0);
+      const rawDate = p.vencimento ? new Date(p.vencimento + 'T12:00:00') : null;
+      const dateStr = rawDate ? rawDate.toLocaleDateString('pt-BR') : '-';
+      let statusLabel = 'A Vencer';
+      if (p.status === 'pago') statusLabel = 'Pago';
+      if (p.status === 'atrasado') statusLabel = 'Em Atraso';
+      if (p.status === 'parcial') statusLabel = 'Parcial';
+
+      return [
+        p.aluno || 'Aluna não identificada',
+        p.formacao || 'Curso não cadastrado',
+        formattedVal,
+        statusLabel,
+        dateStr,
+        p.responsavel || 'Equipe'
+      ];
+    });
+
+    if (tableRows.length === 0) {
+      tableRows.push(['-', 'Nenhum lançamento financeiro corresponde aos filtros aplicados em tela.', '-', '-', '-', '-']);
+    }
+
+    autoTable(doc, {
+      startY: 77,
+      margin: { left: 15, right: 15 },
+      head: [['Aluna', 'Formação / Programa', 'Valor', 'Status', 'Vencimento', 'Responsável']],
+      body: tableRows,
+      theme: 'grid',
+      headStyles: {
+        fillColor: [10, 25, 47],
+        textColor: [255, 255, 255],
+        fontSize: 7.5,
+        fontStyle: 'bold',
+        halign: 'left'
+      },
+      styles: {
+        fontSize: 7.5,
+        font: 'helvetica',
+        cellPadding: 2.2
+      },
+      columnStyles: {
+        2: { fontStyle: 'bold', halign: 'right' },
+        3: { fontStyle: 'bold' },
+        4: { halign: 'center' }
+      },
+      didParseCell: (dataCell) => {
+        if (dataCell.section === 'body' && dataCell.column.index === 3) {
+          const cellVal = dataCell.cell.raw;
+          if (cellVal === 'Pago') {
+            dataCell.cell.styles.textColor = [30, 95, 60];
+          } else if (cellVal === 'Em Atraso') {
+            dataCell.cell.styles.textColor = [175, 25, 25];
+          } else if (cellVal === 'Parcial') {
+            dataCell.cell.styles.textColor = [100, 30, 150];
+          } else if (cellVal === 'A Vencer') {
+            dataCell.cell.styles.textColor = [160, 95, 10];
+          }
+        }
+      }
+    });
+
+    // Add page footer to all pages dynamically
+    const pages = (doc as any).getNumberOfPages();
+    for (let i = 1; i <= pages; i++) {
+      doc.setPage(i);
+      doc.setFontSize(7.5);
+      doc.setTextColor(140, 145, 155);
+      doc.text('Instituto Liana Gomes • Exportação Financeira Personalizada', 15, 287);
+      doc.text(`Página ${i} de ${pages}`, 195, 287, { align: 'right' });
+    }
+
+    doc.save(`financeiro-export-tela-${now.getFullYear()}-${now.getMonth()+1}-${now.getDate()}.pdf`);
+  };
+
   // Local state for filters and views
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -325,13 +514,33 @@ export function FinanceiroModule() {
     e.stopPropagation();
     const updated = { ...item, status: 'pago' };
     await updateModuleData('pagamentos', pagamentos.map((r: any) => r.id === item.id ? updated : r));
+    try {
+      await logAuditEvent('recebimento_confirmado', item.id, {
+        aluno: item.aluno,
+        valor: item.valorCombinado,
+        formacao: item.formacao,
+        fastTrigger: true
+      });
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   // Delete payment
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (confirm('Tem certeza que deseja excluir este registro de pagamento?')) {
+      const target = pagamentos.find((r: any) => r.id === id);
       await updateModuleData('pagamentos', pagamentos.filter((r: any) => r.id !== id));
+      try {
+        await logAuditEvent('exclusao_pagamento', id, {
+          aluno: target?.aluno,
+          valor: target?.valorCombinado,
+          formacao: target?.formacao
+        });
+      } catch (err) {
+        console.error(err);
+      }
     }
   };
 
@@ -365,9 +574,31 @@ export function FinanceiroModule() {
     if (editingItem && editingItem.id) {
       newItem.id = editingItem.id;
       await updateModuleData('pagamentos', pagamentos.map((r: any) => r.id === newItem.id ? newItem : r));
+      try {
+        await logAuditEvent('atualizacao_pagamento', editingItem.id, {
+          aluno: newItem.aluno,
+          valor: newItem.valorCombinado,
+          status: newItem.status,
+          formacao: newItem.formacao,
+          responsavel: newItem.responsavel
+        });
+      } catch (err) {
+        console.error(err);
+      }
     } else {
       newItem.id = 'pag_' + Math.random().toString(36).substring(2, 9);
       await updateModuleData('pagamentos', [newItem, ...pagamentos]);
+      try {
+        await logAuditEvent('cadastro_pagamento', newItem.id, {
+          aluno: newItem.aluno,
+          valor: newItem.valorCombinado,
+          status: newItem.status,
+          formacao: newItem.formacao,
+          responsavel: newItem.responsavel
+        });
+      } catch (err) {
+        console.error(err);
+      }
     }
     setIsModalOpen(false);
   };
@@ -396,11 +627,6 @@ export function FinanceiroModule() {
       : `https://api.whatsapp.com/send?text=${encodedText}`;
       
     window.open(url, '_blank', 'noopener,noreferrer');
-  };
-
-  // Value formatting helper
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
 
   // UI badge generator for status
@@ -442,11 +668,21 @@ export function FinanceiroModule() {
         <div className="flex items-center gap-2 flex-wrap">
           <button 
             type="button"
-            onClick={handleGeneratePDF}
+            onClick={handleExportFilteredPDF}
             className="inline-flex items-center px-4 py-2 border border-[#1D4E89] hover:bg-[#1D4E89]/5 text-[#1D4E89] font-semibold rounded-lg shadow-sm transition bg-white text-sm cursor-pointer select-none"
-            title="Gerar e baixar relatório resumido em PDF para o mês atual"
+            title="Exportar lançamentos na tela atual com os filtros ativos para PDF"
           >
             <FileText className="w-4 h-4 mr-1.5 text-[#1D4E89]" />
+            Exportar PDF
+          </button>
+
+          <button 
+            type="button"
+            onClick={handleGeneratePDF}
+            className="inline-flex items-center px-4 py-2 border border-slate-350 hover:bg-slate-50 text-slate-700 font-semibold rounded-lg shadow-sm transition bg-white text-sm cursor-pointer select-none"
+            title="Gerar e baixar relatório resumido em PDF para o mês atual"
+          >
+            <FileText className="w-4 h-4 mr-1.5 text-slate-500" />
             Relatório do Mês (PDF)
           </button>
           

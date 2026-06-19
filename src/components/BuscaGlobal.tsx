@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useStore } from '../store';
 import { 
   Search, Users, CheckSquare, Award, BookOpen, MessageSquare, 
-  MapPin, Eye, ExternalLink, ArrowRight, UserCheck 
+  MapPin, Eye, ExternalLink, ArrowRight, UserCheck, Bookmark, Tag as TagIcon
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -11,51 +11,99 @@ export function BuscaGlobal() {
   const pessoas = data.pessoas || [];
   const tarefas = data.tarefas_suporte || [];
   const materiais = data.materiais || [];
+  const tagsList = data.tags_personalizaveis || [];
 
   const [term, setTerm] = useState('');
   const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [tagLogic, setTagLogic] = useState<'AND' | 'OR'>('AND');
 
   // Read certificates from real-time database to enable search across certificates
   const certificates = data.certificados_emitidos || [];
 
   const results = useMemo(() => {
-    if (!term.trim() || term.length < 2) return null;
+    const hasQuery = term.trim().length >= 2;
+    const hasTags = selectedTags.length > 0;
 
-    const query = term.toLowerCase();
+    if (!hasQuery && !hasTags) return null;
 
-    // Group matching results
+    const query = term.toLowerCase().trim();
+
+    // 1. Filter pessoas (leads/ alunos) based on query and selected tags
+    const filteredPessoas = pessoas.filter(p => {
+      // Direct text matcher evaluation
+      if (hasQuery) {
+        const matchesText = 
+          p.nome?.toLowerCase().includes(query) ||
+          p.email?.toLowerCase().includes(query) ||
+          p.telefone?.toLowerCase().includes(query) ||
+          p.tipoPessoa?.toLowerCase().includes(query) ||
+          p.status?.toLowerCase().includes(query) ||
+          p.produtoInteresse?.toLowerCase().includes(query) ||
+          p.produtoComprado?.toLowerCase().includes(query) ||
+          p.turma?.toLowerCase().includes(query);
+        
+        if (!matchesText) return false;
+      }
+
+      // Check tags based on AND / OR logic
+      if (hasTags) {
+        if (!p.tags || !Array.isArray(p.tags) || p.tags.length === 0) return false;
+
+        const pTagsLower = p.tags.map((t: string) => t.toLowerCase());
+
+        if (tagLogic === 'AND') {
+          // All selected tags must exist inside person tags array
+          return selectedTags.every(selTag => 
+            pTagsLower.includes(selTag.toLowerCase())
+          );
+        } else {
+          // At least one selected tag must exist inside person tags array
+          return selectedTags.some(selTag => 
+            pTagsLower.includes(selTag.toLowerCase())
+          );
+        }
+      }
+
+      return true;
+    });
+
+    // 2. Filter tasks, materials and certificates purely by text search (tags apply specifically to leads and students)
+    const filteredTarefas = hasQuery
+      ? tarefas.filter(t => 
+          t.titulo?.toLowerCase().includes(query) ||
+          t.descricao?.toLowerCase().includes(query) ||
+          t.responsavel?.toLowerCase().includes(query) ||
+          t.categoria?.toLowerCase().includes(query) ||
+          t.tipo?.toLowerCase().includes(query)
+        )
+      : [];
+
+    const filteredMateriais = hasQuery
+      ? materiais.filter(m => 
+          m.titulo?.toLowerCase().includes(query) ||
+          m.descricao?.toLowerCase().includes(query) ||
+          m.tipo?.toLowerCase().includes(query) ||
+          m.url?.toLowerCase().includes(query)
+        )
+      : [];
+
+    const filteredCertificados = hasQuery
+      ? certificates.filter(c => 
+          c.nomeAluno?.toLowerCase().includes(query) ||
+          c.nomeFormacao?.toLowerCase().includes(query) ||
+          c.turma?.toLowerCase().includes(query) ||
+          c.id?.toLowerCase().includes(query)
+        )
+      : [];
+
     return {
-      pessoas: pessoas.filter(p => 
-        p.nome?.toLowerCase().includes(query) ||
-        p.email?.toLowerCase().includes(query) ||
-        p.telefone?.toLowerCase().includes(query) ||
-        p.tipoPessoa?.toLowerCase().includes(query) ||
-        p.status?.toLowerCase().includes(query) ||
-        p.produtoInteresse?.toLowerCase().includes(query) ||
-        p.produtoComprado?.toLowerCase().includes(query) ||
-        p.turma?.toLowerCase().includes(query)
-      ),
-      tarefas: tarefas.filter(t => 
-        t.titulo?.toLowerCase().includes(query) ||
-        t.descricao?.toLowerCase().includes(query) ||
-        t.responsavel?.toLowerCase().includes(query) ||
-        t.categoria?.toLowerCase().includes(query) ||
-        t.tipo?.toLowerCase().includes(query)
-      ),
-      materiais: materiais.filter(m => 
-        m.titulo?.toLowerCase().includes(query) ||
-        m.descricao?.toLowerCase().includes(query) ||
-        m.tipo?.toLowerCase().includes(query) ||
-        m.url?.toLowerCase().includes(query)
-      ),
-      certificados: certificates.filter(c => 
-        c.nomeAluno?.toLowerCase().includes(query) ||
-        c.nomeFormacao?.toLowerCase().includes(query) ||
-        c.turma?.toLowerCase().includes(query) ||
-        c.id?.toLowerCase().includes(query)
-      )
+      pessoas: filteredPessoas,
+      tarefas: filteredTarefas,
+      materiais: filteredMateriais,
+      certificados: filteredCertificados
     };
-  }, [term, pessoas, tarefas, materiais, certificates]);
+  }, [term, selectedTags, tagLogic, pessoas, tarefas, materiais, certificates]);
 
   const handleOpenFicha = (p: any) => {
     window.dispatchEvent(new CustomEvent('open_pessoa_ficha', { detail: p }));
@@ -160,10 +208,9 @@ export function BuscaGlobal() {
         <h1 className="text-2xl font-extrabold text-[#0A192F] tracking-tight mt-1.5">Busca Global Centrada</h1>
         <p className="text-slate-500 text-xs md:text-sm mt-1">Localize instantaneamente qualquer cadastro de aluna, lead, tarefa, certificado ou recurso estratégico em qualquer tabela.</p>
       </div>
-
       {/* Large search input layout */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-        <label className="text-xs font-extrabold text-slate-500 uppercase tracking-widest">O que você está procurando? <span className="text-[10px] text-slate-400 font-normal lowercase tracking-wide">(Navegue usando ↑ ↓ e Enter)</span></label>
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
+        <label className="text-xs font-extrabold text-slate-500 uppercase tracking-widest block">O que você deseja localizar? <span className="text-[10px] text-slate-400 font-normal lowercase tracking-wide">(Navegue usando ↑ ↓ e Enter)</span></label>
         <div className="relative">
           <Search className="absolute left-4 top-3.5 h-6 w-6 text-slate-400" />
           <input
@@ -180,6 +227,98 @@ export function BuscaGlobal() {
         {term.trim().length > 0 && term.trim().length < 2 && (
           <p className="text-xs text-slate-400 italic">Digite pelo menos 2 caracteres para iniciar a busca...</p>
         )}
+
+        {/* Multi-Tag Selector widget */}
+        <div className="pt-4 border-t border-slate-100 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Bookmark className="w-4 h-4 text-slate-600" />
+              <span className="text-xs font-bold text-slate-700">Filtrar por Múltiplas Tags:</span>
+              {selectedTags.length > 0 && (
+                <span className="bg-indigo-50 text-indigo-805 border border-indigo-200 text-[10px] font-black px-2 py-0.5 rounded-full select-none">
+                  {selectedTags.length} selecionada(s)
+                </span>
+              )}
+            </div>
+
+            {selectedTags.length > 0 && (
+              <div className="flex items-center gap-3.5 text-xs font-semibold">
+                {/* Switch for AND / OR tag matching logic */}
+                <span className="text-[11px] text-slate-400">Condição:</span>
+                <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 select-none">
+                  <button
+                    type="button"
+                    onClick={() => setTagLogic('AND')}
+                    className={cn(
+                      "px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider transition",
+                      tagLogic === 'AND' ? "bg-[#0A192F] text-white" : "text-slate-500 hover:text-slate-800"
+                    )}
+                    title="Exibir somente quem tem TODAS as tags selecionadas"
+                  >
+                    E (Todas)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTagLogic('OR')}
+                    className={cn(
+                      "px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider transition",
+                      tagLogic === 'OR' ? "bg-[#0A192F] text-white" : "text-slate-500 hover:text-slate-800"
+                    )}
+                    title="Exibir quem tem pelo menos uma das tags"
+                  >
+                    OU (Qualquer)
+                  </button>
+                </div>
+
+                <button 
+                  type="button" 
+                  onClick={() => setSelectedTags([])}
+                  className="text-red-500 hover:text-red-650 transition flex items-center gap-1 text-[11px] font-black select-none cursor-pointer"
+                >
+                  ✖ Limpar
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-2 pt-1 select-none">
+            {tagsList.map((tag: any) => {
+              const tagNome = tag.nome || tag.name;
+              const isSelected = selectedTags.some(t => t.toLowerCase() === tagNome.toLowerCase());
+              const tagCor = tag.cor || tag.color || '#64748B';
+
+              return (
+                <button
+                  type="button"
+                  key={tag.id}
+                  onClick={() => {
+                    if (isSelected) {
+                      setSelectedTags(selectedTags.filter(t => t.toLowerCase() !== tagNome.toLowerCase()));
+                    } else {
+                      setSelectedTags([...selectedTags, tagNome]);
+                    }
+                  }}
+                  style={{
+                    backgroundColor: isSelected ? tagCor : `${tagCor}12`,
+                    borderColor: tagCor,
+                    color: isSelected ? '#FFFFFF' : tagCor
+                  }}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-xs font-bold border transition-all duration-200 flex items-center gap-2 cursor-pointer",
+                    isSelected ? "shadow-sm scale-102" : "hover:bg-slate-55/40"
+                  )}
+                >
+                  <span className={cn("w-2 h-2 rounded-full", isSelected ? "bg-white" : "")} style={{ backgroundColor: isSelected ? undefined : tagCor }} />
+                  <span>{tagNome}</span>
+                </button>
+              );
+            })}
+
+            {tagsList.length === 0 && (
+              <p className="text-[11px] text-slate-400 italic">Nenhuma tag cadastrada disponível no sistema.</p>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Results View */}
@@ -188,8 +327,8 @@ export function BuscaGlobal() {
           {!hasAnyResults ? (
             <div className="py-16 text-center text-slate-400 border border-dashed rounded-2xl bg-white bg-slate-50/50">
               <span className="text-3xl select-none">🔍</span>
-              <p className="text-xs font-bold mt-2 text-slate-700">Nenhum registro corresponde a "{term}"</p>
-              <p className="text-[10px] text-slate-500 mt-1">Verifique a ortografia ou tente termos mais genéricos (ex: nome parcial).</p>
+              <p className="text-xs font-bold mt-2 text-slate-705">Nenhum registro corresponde aos filtros selecionados</p>
+              <p className="text-[10px] text-slate-500 mt-1">Verifique os filtros de tag aplicados ou refine seu termo textual para ampliar resultados.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -214,24 +353,44 @@ export function BuscaGlobal() {
                           className={cn(
                             "p-4 rounded-xl border flex items-center justify-between gap-3 cursor-pointer transition-all duration-200",
                             isHighlighted 
-                              ? "border-[#D4AF37] bg-amber-50/50 ring-2 ring-[#D4AF37]/35 shadow-md scale-[1.01]" 
-                              : "border-slate-100 bg-slate-50/40 hover:bg-slate-50"
+                              ? "border-[#D4AF37] bg-amber-50/55 ring-2 ring-[#D4AF37]/35 shadow-md scale-[1.01]" 
+                              : "border-slate-150 bg-slate-50/40 hover:bg-slate-50"
                           )}
                         >
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <span className={`text-[8px] px-1.5 py-0.2 rounded font-black tracking-wider uppercase ${isAluna ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>{p.tipoPessoa || 'lead'}</span>
                             <div className="font-bold text-slate-800 mt-1 truncate">{p.nome}</div>
                             <div className="text-[11px] text-slate-500 truncate">{p.email} • {p.telefone || 'Sem fone'}</div>
                             <div className="text-[10px] text-slate-400 mt-1 truncate">Status: <strong className="uppercase">{p.status}</strong> • SDR: <strong>{p.responsavel}</strong></div>
+                            
+                            {/* Active tags on the person profile preview */}
+                            {p.tags && Array.isArray(p.tags) && p.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-2.5">
+                                {p.tags.map((t: string) => {
+                                  const found = tagsList.find((g: any) => (g.nome || g.name || '').toLowerCase() === t.toLowerCase() || g.id === t);
+                                  const tagCor = found ? (found.cor || found.color) : '#64748B';
+                                  const tagNome = found ? (found.nome || found.name) : t;
+                                  return (
+                                    <span 
+                                      key={t}
+                                      style={{ backgroundColor: `${tagCor}16`, color: tagCor, borderColor: `${tagCor}40` }}
+                                      className="px-2 py-0.5 text-[8px] font-extrabold uppercase border rounded tracking-wider shadow-3xs"
+                                    >
+                                      {tagNome}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
 
                           <button
                             onClick={(e) => { e.stopPropagation(); handleOpenFicha(p); }}
                             className={cn(
-                              "p-1.5 rounded-lg border transition shrink-0 flex items-center gap-1 text-[11px] font-bold",
+                              "p-1.5 rounded-lg border transition shrink-0 flex items-center gap-1 text-[11px] font-bold self-start mt-0.5",
                               isHighlighted 
                                 ? "bg-[#0A192F] text-white border-transparent" 
-                                : "bg-white text-slate-700 hover:bg-[#0A192F] hover:text-white border-slate-200"
+                                : "bg-white text-slate-705 hover:bg-[#0A192F] hover:text-white border-slate-205"
                             )}
                           >
                             <Eye className="w-3.5 h-3.5" /> Ficha

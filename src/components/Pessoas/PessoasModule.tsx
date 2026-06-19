@@ -1,12 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useStore } from '../../store';
-import { Search, Plus, List, Grid, Edit, User as UserIcon, MessageCircle, FileDown } from 'lucide-react';
-import { cn, normalizeStatusSlug, getStatusLabel } from '../../lib/utils';
+import { Search, Plus, List, Grid, Edit, User as UserIcon, MessageCircle, FileDown, X } from 'lucide-react';
+import { cn, normalizeStatusSlug, getStatusLabel, showToast } from '../../lib/utils';
 import { exportToCsv } from '../../lib/csv';
 import { PessoaFicha } from './PessoaFicha';
+import { logAuditEvent } from '../../lib/audit';
 
 export function PessoasModule() {
-  const { data } = useStore();
+  const { data, addSingleDocument } = useStore();
   const pessoas = data.pessoas || [];
   
   const [viewMode, setViewMode] = useState<'table'|'cards'>('table');
@@ -14,6 +15,184 @@ export function PessoasModule() {
   const [filters, setFilters] = useState({ tipoPessoa: '', status: '', temperatura: '', tag: '' });
   
   const [selectedPessoa, setSelectedPessoa] = useState<any>(null);
+
+  // States for Adding New Lead Modal
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newLeadNome, setNewLeadNome] = useState('');
+  const [newLeadEmail, setNewLeadEmail] = useState('');
+  const [newLeadTelefone, setNewLeadTelefone] = useState('');
+  const [newLeadProduto, setNewLeadProduto] = useState('');
+  const [newLeadTemperatura, setNewLeadTemperatura] = useState('frio');
+  const [newLeadStatus, setNewLeadStatus] = useState('novo');
+  const [newLeadResponsavel, setNewLeadResponsavel] = useState('Ana');
+  const [newLeadOrigem, setNewLeadOrigem] = useState('Tráfego Pago');
+  const [newLeadObservacoes, setNewLeadObservacoes] = useState('');
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
+
+  // Load draft from localStorage on mount or when modal opens
+  useEffect(() => {
+    const savedDraft = localStorage.getItem('ilg_new_lead_draft_pessoas');
+    if (savedDraft) {
+      try {
+        const parsed = JSON.parse(savedDraft);
+        setNewLeadNome(parsed.nome || '');
+        setNewLeadEmail(parsed.email || '');
+        setNewLeadTelefone(parsed.telefone || '');
+        setNewLeadProduto(parsed.produtoInteresse || '');
+        setNewLeadTemperatura(parsed.temperatura || 'frio');
+        setNewLeadStatus(parsed.status || 'novo');
+        setNewLeadResponsavel(parsed.responsavel || 'Ana');
+        setNewLeadOrigem(parsed.origem || 'Tráfego Pago');
+        setNewLeadObservacoes(parsed.observacoes || '');
+      } catch (e) {
+        console.error("Erro ao ler rascunho de lead na base de pessoas", e);
+      }
+    }
+  }, [showAddModal]);
+
+  // Execute autosave to localStorage whenever any field value changes
+  useEffect(() => {
+    if (!showAddModal) return;
+
+    const draft = {
+      nome: newLeadNome,
+      email: newLeadEmail,
+      telefone: newLeadTelefone,
+      produtoInteresse: newLeadProduto,
+      temperatura: newLeadTemperatura,
+      status: newLeadStatus,
+      responsavel: newLeadResponsavel,
+      origem: newLeadOrigem,
+      observacoes: newLeadObservacoes,
+    };
+
+    const hasAnyContent = 
+      newLeadNome.trim() || 
+      newLeadEmail.trim() || 
+      newLeadTelefone.trim() || 
+      newLeadProduto.trim() || 
+      newLeadObservacoes.trim();
+
+    if (hasAnyContent) {
+      localStorage.setItem('ilg_new_lead_draft_pessoas', JSON.stringify(draft));
+      const now = new Date();
+      setDraftSavedAt(now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    } else {
+      localStorage.removeItem('ilg_new_lead_draft_pessoas');
+      setDraftSavedAt(null);
+    }
+  }, [
+    newLeadNome,
+    newLeadEmail,
+    newLeadTelefone,
+    newLeadProduto,
+    newLeadTemperatura,
+    newLeadStatus,
+    newLeadResponsavel,
+    newLeadOrigem,
+    newLeadObservacoes,
+    showAddModal
+  ]);
+
+  const handleClearDraft = () => {
+    if (confirm('Deseja realmente limpar todos os dados preenchidos neste rascunho?')) {
+      localStorage.removeItem('ilg_new_lead_draft_pessoas');
+      setNewLeadNome('');
+      setNewLeadEmail('');
+      setNewLeadTelefone('');
+      setNewLeadProduto('');
+      setNewLeadTemperatura('frio');
+      setNewLeadStatus('novo');
+      setNewLeadResponsavel('Ana');
+      setNewLeadOrigem('Tráfego Pago');
+      setNewLeadObservacoes('');
+      setDraftSavedAt(null);
+      showToast('Campos limpos com sucesso.', 'info');
+    }
+  };
+
+  const handleCloseAttempt = () => {
+    const hasAnyContent = 
+      newLeadNome.trim() || 
+      newLeadEmail.trim() || 
+      newLeadTelefone.trim() || 
+      newLeadProduto.trim() || 
+      newLeadObservacoes.trim();
+
+    if (hasAnyContent) {
+      if (confirm('O rascunho preenchido foi salvo de forma automática e não será perdido. Deseja mesmo fechar o formulário agora?')) {
+        setShowAddModal(false);
+      }
+    } else {
+      setShowAddModal(false);
+    }
+  };
+
+  const handleSaveNewLead = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newLeadNome.trim()) {
+      showToast('Por favor, informe o nome do lead.', 'error');
+      return;
+    }
+
+    try {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const newLeadDef = {
+        id: 'lead_' + Date.now(),
+        nome: newLeadNome.trim(),
+        email: newLeadEmail.trim(),
+        telefone: newLeadTelefone.trim(),
+        tipoPessoa: 'lead',
+        status: newLeadStatus,
+        temperatura: newLeadTemperatura,
+        produtoInteresse: newLeadProduto.trim(),
+        responsavel: newLeadResponsavel,
+        origem: newLeadOrigem,
+        observacoes: newLeadObservacoes.trim(),
+        proximoContato: todayStr,
+        dataCadastro: todayStr,
+        timeline: [
+          { text: 'Lead cadastrado manualmente pela Base de Pessoas.', date: 'Agora', type: 'system' }
+        ]
+      };
+
+      if (typeof addSingleDocument === 'function') {
+        const docId = await addSingleDocument('pessoas', newLeadDef);
+        try {
+          await logAuditEvent('cadastro_pessoa', docId || 'novo', {
+            nome: newLeadDef.nome,
+            email: newLeadDef.email,
+            telefone: newLeadDef.telefone,
+            responsavel: newLeadDef.responsavel,
+            tipo: newLeadDef.tipoPessoa,
+            origem: newLeadDef.origem
+          });
+        } catch (e) {
+          console.error("Erro ao registrar log de auditoria ao cadastrar pessoa", e);
+        }
+      } else {
+        throw new Error('Função addSingleDocument não disponível no useStore.');
+      }
+      
+      // Clear draft & state
+      localStorage.removeItem('ilg_new_lead_draft_pessoas');
+      setNewLeadNome('');
+      setNewLeadEmail('');
+      setNewLeadTelefone('');
+      setNewLeadProduto('');
+      setNewLeadTemperatura('frio');
+      setNewLeadStatus('novo');
+      setNewLeadResponsavel('Ana');
+      setNewLeadOrigem('Tráfego Pago');
+      setNewLeadObservacoes('');
+      setDraftSavedAt(null);
+      
+      setShowAddModal(false);
+      showToast('Lead cadastrado com sucesso!', 'success');
+    } catch (error: any) {
+      showToast('Erro ao cadastrar lead: ' + error.message, 'error');
+    }
+  };
 
   const tagsList = data.tags_personalizaveis || [];
 
@@ -60,6 +239,12 @@ export function PessoasModule() {
           <p className="text-slate-500 text-sm">{filtered.length} registro(s)</p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="px-3 py-1.5 bg-[#0A192F] hover:bg-slate-800 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 transition shadow-sm"
+          >
+            <Plus className="w-4 h-4 text-white" /> Cadastrar Lead Manual
+          </button>
           <button
             onClick={() => exportToCsv(`export-pessoas-${new Date().toISOString().split('T')[0]}.csv`, filtered, ['nome', 'email', 'telefone', 'tipoPessoa', 'status', 'temperatura', 'produtoInteresse', 'proximoContato'])}
             className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-lg flex items-center gap-1.5 transition"
@@ -292,6 +477,196 @@ export function PessoasModule() {
       
       {selectedPessoa && (
         <PessoaFicha pessoa={selectedPessoa} onClose={() => setSelectedPessoa(null)} />
+      )}
+
+      {/* Adding New Lead Modal with Autosave */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center">
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={handleCloseAttempt}></div>
+          <div className="bg-white w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col rounded-3xl shadow-2xl z-10 mx-4 border border-slate-200/50 animate-fade-in text-slate-700">
+            {/* Header */}
+            <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-slate-50">
+              <div>
+                <h2 className="text-xl font-bold text-slate-800 text-left">Cadastrar Lead Manual</h2>
+                <p className="text-xs text-slate-500 font-sans mt-0.5 text-left">Adicione um novo lead diretamente à Base de Pessoas</p>
+              </div>
+              <button type="button" onClick={handleCloseAttempt} className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-100 rounded-full transition-colors">
+                <X className="w-5 h-5"/>
+              </button>
+            </div>
+            {/* Body */}
+            <div className="overflow-y-auto flex-1 p-6 text-left">
+              <form id="addLeadForm" onSubmit={handleSaveNewLead} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Nome */}
+                <div className="md:col-span-2 text-left">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nome Completo *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Nome do lead..."
+                    value={newLeadNome}
+                    onChange={e => setNewLeadNome(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg px-3.5 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1D4E89]/20 focus:border-[#1D4E89] text-slate-800 bg-white placeholder-slate-400"
+                  />
+                </div>
+
+                {/* Email */}
+                <div className="text-left">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">E-mail</label>
+                  <input
+                    type="email"
+                    placeholder="exemplo@gmail.com"
+                    value={newLeadEmail}
+                    onChange={e => setNewLeadEmail(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg px-3.5 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1D4E89]/20 focus:border-[#1D4E89] text-slate-800 bg-white placeholder-slate-400"
+                  />
+                </div>
+
+                {/* Telefone */}
+                <div className="text-left">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Telefone / WhatsApp</label>
+                  <input
+                    type="text"
+                    placeholder="(00) 90000-0000"
+                    value={newLeadTelefone}
+                    onChange={e => setNewLeadTelefone(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg px-3.5 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1D4E89]/20 focus:border-[#1D4E89] text-slate-800 bg-white placeholder-slate-400"
+                  />
+                </div>
+
+                {/* Produto de Interesse */}
+                <div className="text-left">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Produto / Curso de Interesse</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Formação Direitos Humanos"
+                    value={newLeadProduto}
+                    onChange={e => setNewLeadProduto(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg px-3.5 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1D4E89]/20 focus:border-[#1D4E89] text-slate-800 bg-white placeholder-slate-400"
+                  />
+                </div>
+
+                {/* Temperatura */}
+                <div className="text-left">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Temperatura de Interesse</label>
+                  <select
+                    value={newLeadTemperatura}
+                    onChange={e => setNewLeadTemperatura(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg px-3.5 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1D4E89]/20 focus:border-[#1D4E89] text-slate-800 bg-white"
+                  >
+                    <option value="frio">Frio ❄️</option>
+                    <option value="morno">Morno 🔥</option>
+                    <option value="quente">Quente ⚡</option>
+                  </select>
+                </div>
+
+                {/* Status Comercial */}
+                <div className="text-left">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Etapa Kanban Inicial</label>
+                  <select
+                    value={newLeadStatus}
+                    onChange={e => setNewLeadStatus(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg px-3.5 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1D4E89]/20 focus:border-[#1D4E89] text-slate-800 bg-white"
+                  >
+                    <option value="novo">Novo Lead</option>
+                    <option value="em qualificação">Em Qualificação</option>
+                    <option value="em negociação">Em Negociação</option>
+                    <option value="aguardando pagamento">Aguardando Pagamento</option>
+                    <option value="comprou">Comprou</option>
+                    <option value="perdido">Perdido</option>
+                  </select>
+                </div>
+
+                {/* Responsavel */}
+                <div className="text-left">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Responsável Comercial</label>
+                  <select
+                    value={newLeadResponsavel}
+                    onChange={e => setNewLeadResponsavel(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg px-3.5 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1D4E89]/20 focus:border-[#1D4E89] text-slate-800 bg-white"
+                  >
+                    <option value="Ana">Ana</option>
+                    <option value="Nuria">Núria</option>
+                    <option value="Fabi">Fabi</option>
+                    <option value="Luiza">Luiza</option>
+                    <option value="Liana">Liana Gomes</option>
+                  </select>
+                </div>
+
+                {/* Origem */}
+                <div className="md:col-span-2 text-left">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Canal de Origem</label>
+                  <select
+                    value={newLeadOrigem}
+                    onChange={e => setNewLeadOrigem(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg px-3.5 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1D4E89]/20 focus:border-[#1D4E89] text-slate-800 bg-white"
+                  >
+                    <option value="Tráfego Pago">Tráfego Pago (Anúncios)</option>
+                    <option value="Instagram">Instagram Orgânico</option>
+                    <option value="WhatsApp">WhatsApp Direto</option>
+                    <option value="Google">Pesquisa Google</option>
+                    <option value="Indicação">Indicação de Aluna</option>
+                    <option value="Site/Landing page">Site / Landing Page</option>
+                  </select>
+                </div>
+
+                {/* Observações */}
+                <div className="md:col-span-2 text-left">
+                  <label className="block text-xs font-bold text-[#0A192F] uppercase tracking-wider mb-1">Observações / Notas Comerciais</label>
+                  <textarea
+                    placeholder="Detalhes sobre a conversa, dores do cliente, histórico..."
+                    value={newLeadObservacoes}
+                    onChange={e => setNewLeadObservacoes(e.target.value)}
+                    rows={3}
+                    className="w-full border border-slate-300 rounded-lg px-3.5 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1D4E89]/20 focus:border-[#1D4E89] text-slate-800 bg-white placeholder-slate-400"
+                  />
+                </div>
+              </form>
+            </div>
+            {/* Footer */}
+            <div className="border-t border-slate-100 px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-slate-50">
+              {/* Draft Status */}
+              <div className="flex items-center gap-3">
+                {draftSavedAt ? (
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 font-semibold bg-emerald-50 border border-emerald-100 rounded-full px-2.5 py-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                      Rascunho salvo às {draftSavedAt}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleClearDraft}
+                      className="text-xs text-rose-500 hover:text-rose-700 hover:underline font-semibold"
+                      title="Apagar dados digitados"
+                    >
+                      Descartar rascunho
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-xs text-slate-400 font-medium font-sans">Autosalvamento ativo</span>
+                )}
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex justify-end gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleCloseAttempt}
+                  className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg font-bold text-xs hover:bg-slate-100 transition shadow-sm cursor-pointer select-none"
+                >
+                  Cancelar
+                </button>
+                <button
+                  form="addLeadForm"
+                  type="submit"
+                  className="px-4 py-2 bg-[#0A192F] hover:bg-[#152a4a] text-white rounded-lg font-bold text-xs transition shadow-md cursor-pointer select-none flex items-center"
+                >
+                  Cadastrar Lead
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

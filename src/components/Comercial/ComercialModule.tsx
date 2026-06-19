@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../../store';
-import { Search, List, Grid, Trello, User, Calendar, MessageCircle, Mail, Phone, Flame, ChevronRight, Plus, X } from 'lucide-react';
+import { Search, List, Grid, Trello, User, Calendar, MessageCircle, Mail, Phone, Flame, ChevronRight, Plus, X, FileText } from 'lucide-react';
 import { PessoaFicha } from '../Pessoas/PessoaFicha';
 import { showToast } from '../../lib/utils';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export function ComercialModule() {
   const { data, addSingleDocument } = useStore();
@@ -215,6 +217,189 @@ export function ComercialModule() {
     }
   };
 
+  const handleExportFilteredPDF = () => {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const now = new Date();
+    
+    // Header Background
+    doc.setFillColor(10, 25, 47); // Dark Navy #0A192F
+    doc.rect(0, 0, 210, 38, 'F');
+
+    // Title / branding
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(15);
+    doc.text('INSTITUTO LIANA GOMES', 15, 14);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(212, 175, 55); // Brand Gold #D4AF37
+    doc.text('Relatório Integrado da Jornada Comercial (Filtros Ativos)', 15, 20);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(170, 180, 190);
+    doc.text(`Gerado em: ${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`, 15, 27);
+
+    // Active filters label box
+    doc.setFillColor(255, 255, 255, 0.15); // Transparent white overlay
+    doc.roundedRect(132, 8, 63, 22, 1.5, 1.5, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.text('PARÂMETROS DA TELA', 135, 13);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.text(`Busca: ${search ? `"${search}"` : 'Tudo (Sem filtro)'}`, 135, 18);
+    doc.text(`Total Exibidos: ${filteredLeads.length} leads`, 135, 23);
+
+    // Funnel Stats Summary (Novo, Ativos, Ganhos, Perdidos)
+    const countNovo = filteredLeads.filter(l => (l.status || 'novo').toLowerCase() === 'novo').length;
+    const countEmNegoc = filteredLeads.filter(l => (l.status || '').toLowerCase() === 'em negociação' || (l.status || '').toLowerCase() === 'em qualificação').length;
+    const countComprou = filteredLeads.filter(l => (l.status || '').toLowerCase() === 'comprou').length;
+    const countPerdidos = filteredLeads.filter(l => (l.status || '').toLowerCase() === 'perdido').length;
+
+    const cardY = 45;
+    const boxW = 42;
+    const boxG = 4;
+    const leftMargin = 15;
+
+    // Card 1: Lead Novo
+    doc.setFillColor(240, 246, 254); // Soft blue
+    doc.setDrawColor(215, 225, 248);
+    doc.roundedRect(leftMargin, cardY, boxW, 15, 1.5, 1.5, 'FD');
+    doc.setTextColor(15, 55, 130);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.text('NOVOS LEADS', leftMargin + 3, cardY + 5);
+    doc.setFontSize(9.5);
+    doc.text(`${countNovo}`, leftMargin + 3, cardY + 11);
+
+    // Card 2: Em Negociação / Qualificação
+    const xCard2 = leftMargin + boxW + boxG;
+    doc.setFillColor(254, 249, 237); // Soft amber
+    doc.setDrawColor(253, 235, 190);
+    doc.roundedRect(xCard2, cardY, boxW, 15, 1.5, 1.5, 'FD');
+    doc.setTextColor(160, 95, 10);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.text('EM NEGOCIAÇÃO', xCard2 + 3, cardY + 5);
+    doc.setFontSize(9.5);
+    doc.text(`${countEmNegoc}`, xCard2 + 3, cardY + 11);
+
+    // Card 3: Ganhos
+    const xCard3 = xCard2 + boxW + boxG;
+    doc.setFillColor(243, 249, 245); // Soft green
+    doc.setDrawColor(210, 230, 215);
+    doc.roundedRect(xCard3, cardY, boxW, 15, 1.5, 1.5, 'FD');
+    doc.setTextColor(30, 95, 60);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.text('COMPRARAM (GANHOS)', xCard3 + 3, cardY + 5);
+    doc.setFontSize(9.5);
+    doc.text(`${countComprou}`, xCard3 + 3, cardY + 11);
+
+    // Card 4: Perdidos
+    const xCard4 = xCard3 + boxW + boxG;
+    doc.setFillColor(254, 242, 242); // Soft red
+    doc.setDrawColor(254, 215, 215);
+    doc.roundedRect(xCard4, cardY, boxW, 15, 1.5, 1.5, 'FD');
+    doc.setTextColor(175, 25, 25);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.text('PERDIDOS / OUTROS', xCard4 + 3, cardY + 5);
+    doc.setFontSize(9.5);
+    doc.text(`${countPerdidos}`, xCard4 + 3, cardY + 11);
+
+    doc.setDrawColor(225, 230, 235);
+    doc.line(15, 66, 195, 66);
+
+    // List title block
+    doc.setTextColor(10, 25, 47);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.text(`LEADS E OPORTUNIDADES FILTRADAS`, 15, 72);
+
+    const tableRows = filteredLeads.map((item: any) => {
+      const formattedPhone = item.telefone || 'Sem telefone';
+      const formattedEmail = item.email || 'Sem email';
+      const cleanDate = item.dataCadastro ? new Date(item.dataCadastro + 'T12:00:00') : null;
+      const formattedDate = cleanDate ? cleanDate.toLocaleDateString('pt-BR') : '-';
+      
+      const statusRaw = String(item.status || 'novo').toUpperCase();
+      const tempLabel = String(item.temperatura || 'frio').toUpperCase();
+
+      return [
+        item.nome || 'Sem Nome',
+        `${formattedPhone}\n${formattedEmail}`,
+        item.produtoInteresse || 'Nenhum informado',
+        `${statusRaw}\n(${tempLabel})`,
+        item.responsavel || 'Mara',
+        formattedDate
+      ];
+    });
+
+    if (tableRows.length === 0) {
+      tableRows.push(['-', 'Nenhum lead encontrado com os critérios de busca atuais.', '-', '-', '-', '-']);
+    }
+
+    autoTable(doc, {
+      startY: 76,
+      margin: { left: 15, right: 15 },
+      head: [['Nome do Lead', 'Informações de Contato', 'Produto de Interesse', 'Status & Temp', 'SDR', 'Data Cad.']],
+      body: tableRows,
+      theme: 'grid',
+      headStyles: {
+        fillColor: [10, 25, 47],
+        textColor: [255, 255, 255],
+        fontSize: 7.5,
+        fontStyle: 'bold',
+        halign: 'left'
+      },
+      styles: {
+        fontSize: 7.5,
+        font: 'helvetica',
+        cellPadding: 2.5,
+        valign: 'middle'
+      },
+      columnStyles: {
+        0: { fontStyle: 'bold' },
+        3: { fontStyle: 'bold' }
+      },
+      didParseCell: (dataCell) => {
+        if (dataCell.section === 'body' && dataCell.column.index === 3) {
+          const val = String(dataCell.cell.raw || '').toLowerCase();
+          if (val.includes('comprou') || val.includes('ganho')) {
+            dataCell.cell.styles.textColor = [30, 95, 60];
+          } else if (val.includes('perdido')) {
+            dataCell.cell.styles.textColor = [175, 25, 25];
+          } else if (val.includes('negociação')) {
+            dataCell.cell.styles.textColor = [160, 95, 10];
+          } else if (val.includes('quente')) {
+            dataCell.cell.styles.textColor = [185, 50, 0];
+          }
+        }
+      }
+    });
+
+    // Add page numbers
+    const pages = (doc as any).getNumberOfPages();
+    for (let i = 1; i <= pages; i++) {
+      doc.setPage(i);
+      doc.setFontSize(7.5);
+      doc.setTextColor(140, 145, 155);
+      doc.text('Instituto Liana Gomes • Relatório de Gestão Comercial / CRM', 15, 287);
+      doc.text(`Página ${i} de ${pages}`, 195, 287, { align: 'right' });
+    }
+
+    doc.save(`comercial-export-leads-${now.getFullYear()}-${now.getMonth()+1}-${now.getDate()}.pdf`);
+  };
+
   return (
     <div className="flex flex-col min-h-full space-y-4 pb-12">
       {/* Header */}
@@ -223,7 +408,17 @@ export function ComercialModule() {
           <h1 className="text-2xl font-bold text-[#0A192F]">Jornada Comercial</h1>
           <p className="text-slate-500 text-sm">Acompanhamento e conversão de leads ({filteredLeads.length})</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={handleExportFilteredPDF}
+            className="inline-flex items-center px-4 py-2 border border-[#1D4E89] hover:bg-[#1D4E89]/5 text-[#1D4E89] font-semibold rounded-lg shadow-sm transition bg-white text-sm cursor-pointer select-none"
+            title="Exportar dados filtrados da jornada comercial atual em PDF"
+          >
+            <FileText className="w-4 h-4 mr-1.5 text-[#1D4E89]" />
+            Exportar PDF
+          </button>
+
           <button
             type="button"
             onClick={() => setShowAddModal(true)}

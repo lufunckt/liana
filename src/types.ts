@@ -34,4 +34,5 @@ export interface AppData {
   ilgc_mensagens?: any[];
   ilgc_notificacoes?: any[];
   allowed_emails?: any[];
+  historico?: any[];
 }

@@ -26,6 +26,26 @@ export function MeuPerfilModal({ onClose, userId }: MeuPerfilModalProps) {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
+  useEffect(() => {
+    if (activeProfile.nome) setFormName(prev => prev || activeProfile.nome || '');
+    if (activeProfile.email) setFormEmail(prev => prev || activeProfile.email || '');
+    if (activeProfile.foto) setFormFoto(prev => prev === '' ? (activeProfile.foto || '') : prev);
+    if (activeProfile.perfil) setFormBiografia(prev => prev || activeProfile.perfil || '');
+    if (activeProfile.telefone) setFormPhone(prev => prev || activeProfile.telefone || '');
+    if (activeProfile.linkedin) setFormLinkedin(prev => prev || activeProfile.linkedin || '');
+    if (activeProfile.instagram) setFormInstagram(prev => prev || activeProfile.instagram || '');
+    if (activeProfile.cargo) setFormCargo(prev => prev || activeProfile.cargo || '');
+  }, [
+    activeProfile.nome, 
+    activeProfile.email, 
+    activeProfile.foto, 
+    activeProfile.perfil, 
+    activeProfile.telefone, 
+    activeProfile.linkedin, 
+    activeProfile.instagram, 
+    activeProfile.cargo
+  ]);
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -36,6 +56,14 @@ export function MeuPerfilModal({ onClose, userId }: MeuPerfilModalProps) {
       const snapshot = await uploadBytes(storageRef, file);
       const downloadURL = await getDownloadURL(snapshot.ref);
       setFormFoto(downloadURL);
+      
+      // Persist photo directly to Firebase
+      const exists = perfis.some((p: any) => p.id === userId);
+      if (exists) {
+         await updateSingleField('perfis', userId, { foto: downloadURL });
+      } else {
+         await addSingleDocument('perfis', { id: userId, foto: downloadURL });
+      }
     } catch (e) {
       console.error(e);
       alert('Erro ao enviar imagem.');
@@ -106,6 +134,10 @@ export function MeuPerfilModal({ onClose, userId }: MeuPerfilModalProps) {
                   <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} disabled={uploading} />
                 </label>
               </div>
+              <label className="text-[11px] font-extrabold text-[#1D4E89] hover:text-[#0A192F] hover:underline cursor-pointer select-none">
+                {uploading ? 'Enviando...' : 'Fazer Upload'}
+                <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} disabled={uploading} />
+              </label>
             </div>
 
             <div className="flex-1 space-y-4">
